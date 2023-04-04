@@ -12,7 +12,7 @@ cd Xarxes-Practica-1
 # Si pasem el argument -p fem el commit
 
 file_name="version.txt"
-rute="/utils" # Si es vol en la ruta del mateix github, deixar en blanc
+rute="utils/" # Si es vol en la ruta del mateix github, deixar en blanc
 file_def=$rute$file_name
 
 # Comprobar si el archivo existe
