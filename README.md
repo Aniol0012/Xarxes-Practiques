@@ -15,17 +15,18 @@ Repositori de les activitats i pràctiques realitzades a Progrmacio II.
    git clone https://github.com/Aniol0012/Xarxes-Practica-1
    ```
 ### Ús:
-    1. Compilar el Client:
+1. Compilar el Client:
+    
     ```sh
     make
     ```
     
-    2. Obrir el servidor:
+2. Obrir el servidor:
     ```sh
     ./server.py
     ```
 
-    3. Obrir el client/clients en un altre terminal:
+3. Obrir el client/clients en un altre terminal:
     ```sh
     ./client
     ```
