@@ -7,7 +7,7 @@ Autor: **Aniol Serrano Ortega**
 
 ### Descripció:
 
-Repositori de les activitats i pràctiques realitzades a Progrmacio II.
+Repositori de la pràctica 1 de Xarxes, Programació d'aplicacións de xarxa.
 
 ### Instal·lació:
 
