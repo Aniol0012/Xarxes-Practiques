@@ -18,7 +18,7 @@
 
 #include <netinet/in.h>
 
-#define PORT 12345
+//#define PORT 12345
 #define BUFFER_SIZE 1024
 #define T 1
 #define P 2
