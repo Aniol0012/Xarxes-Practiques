@@ -2,8 +2,7 @@
 
 clear
 
-
-pre_help_panel() {
+common_help_panel() {
     echo "On: -p és per a fer el commit al github, sinó nomes se copia."
     echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
     es printarà en numero de versió actual"
@@ -13,13 +12,13 @@ pre_help_panel() {
 help_panel() {
     echo "───────────────────────────────────────────────────────────────────────────"
     echo "Recorda que també pots fer servir: ./clonar.sh <-p <"MISSATGE">>"
-    pre_help_panel
+    common_help_panel
 }
 
 help_panel2() {
     echo "───────────────────────────────────────────────────────────────────────────"
     echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
-    pre_help_panel
+    common_help_panel
 }
 
 if [[ $# == 0 ]]; then
@@ -34,7 +33,9 @@ cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c client*.cfg equips.dat
 # Clonació de arxius utils pero no necessaris per a realitzar la pràctica:
 cp clonar.sh Xarxes-Practica-1/utils
 
-# Després ens posicionem en la carpeta del github(Xarxes-Practica-1) per a fer el commit
+echo "Els arxius s'han copiat correctament"
+
+# Després ens posicionem en la carpeta del github (Xarxes-Practica-1) per a fer el commit
 cd Xarxes-Practica-1
 
 # Si pasem el argument -p fem el commit
@@ -61,7 +62,6 @@ echo "${new_version}" > $file_def
 
 if [[ $1 == "-p" ]]; then
     git add .
-    #git commit -m "$new_version"
-    git commit -m "test"
+    git commit -m "$new_version $2"
     git push
 fi
