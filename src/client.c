@@ -2,11 +2,13 @@
 
 #include <stdlib.h>
 
+#include <time.h>
+
 #include <string.h>
 
 #include <stdbool.h> //Not used
 
-#include <signal.h> //Not used
+#include <signal.h>  //Not used
 
 #include <unistd.h>
 
@@ -32,10 +34,11 @@
 #define SEND_ALIVE 3
 
 int current_state = DISCONNECTED;
+bool show_local_time = true;
 
 // DEFINIM VARIABLES DE SORTIDA
 #define EXIT_SUCESS 0
-#define EXIT_FAIL - 1
+#define EXIT_FAIL -1
 
 char * NMS_Id = "127.0.0.1";
 char * NMS_UDP_Port = "2023";
@@ -146,7 +149,7 @@ void obrir_socket() {
 void read_config_file(const char * filename) {
   FILE * file = fopen(filename, "r");
   if (!file) {
-    perror("Error al abrir el archivo de configuración");
+    perror("Error al obrir l'axiu de configuració");
     exit(EXIT_FAIL);
   }
 
@@ -165,7 +168,14 @@ void read_config_file(const char * filename) {
   fclose(file);
 }
 
-void print_msg(char * str, int current_state) {
+void get_time(char * time_str) {
+  time_t t = time(NULL);
+  struct tm tm = * localtime( & t);
+
+  sprintf(time_str, "%02d:%02d:%02d:", tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
+void print_msg(char * str_given, int current_state) {
   char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
 
   // Creem un diccionari per a cada estat
@@ -186,9 +196,15 @@ void print_msg(char * str, int current_state) {
     strcpy(current_state_str, "DISCONNECTED");
     break;
   }
-  printf("MSG.  =>  %s: %s\n", str, current_state_str);
+  if (show_local_time) {
+    char time_str[10];
+    get_time(time_str);
+    printf("%s MSG.  =>  %s: %s\n", time_str, str_given, current_state_str);
+  } else {
+    printf("MSG.  =>  %s: %s\n", str_given, current_state_str);
+  }
 }
- //
+
 void print_bar() {
   printf("───────────────────────────────────────────────────────────────────────────\n");
 }

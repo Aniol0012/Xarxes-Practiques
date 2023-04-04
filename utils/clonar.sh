@@ -68,7 +68,11 @@ fi
 current_version=$(cat $file_def)
 
 # Incrementar el valor en una unidad
-new_version=$((current_version+1))
+if [[ $1 == "-p" ]]; then
+    new_version=$((current_version+1))
+else 
+    new_version=$((current_version))
+fi
 
 # Escribir el nuevo valor en el archivo
 echo "${new_version}" > $file_def
