@@ -62,6 +62,6 @@ echo "${new_version}" > $file_def
 
 if [[ $1 == "-p" ]]; then
     git add .
-    git commit -m "$new_version $2"
+    git commit -m "$new_version $2$3"
     git push
 fi

@@ -15,7 +15,7 @@ Repositori de les activitats i pràctiques realitzades a Progrmacio II.
    git clone https://github.com/Aniol0012/Xarxes-Practica-1
    ```
 ### Ús:
-1. Compilar el Client:
+1. Compilar el client:
     
     ```sh
     make
