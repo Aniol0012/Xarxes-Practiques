@@ -37,7 +37,3 @@ if [[ $1 == "-p" ]]; then
     git commit -m "test"
     git push
 fi
-
-version_control() {
-    
-}
