@@ -187,7 +187,7 @@ void print_msg(char * str, int current_state) {
     break;
   }
   printf("MSG.  =>  %s: %s\n", str, current_state_str);
-}
+} 
 
 void print_bar() {
   printf("───────────────────────────────────────────────────────────────────────────\n");
