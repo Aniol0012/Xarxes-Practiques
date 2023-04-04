@@ -35,6 +35,7 @@
 
 int current_state = DISCONNECTED;
 bool show_local_time = true;
+bool debug = false;
 
 // DEFINIM VARIABLES DE SORTIDA
 #define EXIT_SUCESS 0
@@ -44,6 +45,14 @@ char * NMS_Id = "127.0.0.1";
 char * NMS_UDP_Port = "2023";
 int socketfd;
 struct sockaddr_in server_addr;
+
+char * strdup(const char * ); // Inicialitzem strdup per a poder usarla
+
+// DEFINIM LES VARIABLES AUXILIARS
+void obrir_socket();
+void read_config_file(const char * filename);
+void print_msg(char * str, int current_state);
+void print_bar();
 
 void send_message(int socketfd,
   const char * message) {
@@ -59,18 +68,13 @@ ssize_t receive_message(int socketfd, char * buffer, size_t size) {
   if (received < 0) {
     perror("Error receiving message");
     exit(EXIT_FAIL);
+  } else {
+    print_msg("S'ha rebut el missatge amb éxit", REGISTERED); // TESTING
   }
   buffer[received] = '\0';
   return received;
 }
 
-char * strdup(const char * ); // Inicialitzem strdup per a poder usarla
-
-// DEFINIM LES VARIABLES AUXILIARS
-void obrir_socket();
-void read_config_file(const char * filename);
-void print_msg(char * str, int current_state);
-void print_bar();
 
 int main(int argc, char * argv[]) {
   char buffer[BUFFER_SIZE];
@@ -79,7 +83,7 @@ int main(int argc, char * argv[]) {
 
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0) {
-      debug = 1;
+      debug = true;
     } else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) { // Mirem si s'ha proporcionat el parametre -c seguit del nom del fitxer
       i++;
       config_file = argv[i];
