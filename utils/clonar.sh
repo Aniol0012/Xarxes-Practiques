@@ -6,6 +6,8 @@ common_help_panel() {
     echo "On: -p és per a fer el commit al github, sinó nomes se copia."
     echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
     es printarà en numero de versió actual"
+    echo "-r per a començar amb la versió igual a 1"
+    echo "-r <versió> per a posar la versió desitjada"
     echo "───────────────────────────────────────────────────────────────────────────"
 }
 
@@ -22,9 +24,9 @@ help_panel2() {
 }
 
 if [[ $# == 0 ]]; then
-    help_panel
+    help_panel # Si no se passen arguments
 else
-    help_panel2
+    help_panel2 # En cas que se passin arguments
 fi
 
 # Clonació dels arxius de configuració i el codi al github:
@@ -38,16 +40,27 @@ echo "Tots els arxius s'han copiat correctament"
 # Després ens posicionem en la carpeta del github (Xarxes-Practica-1) per a fer el commit
 cd Xarxes-Practica-1
 
-# Si pasem el argument -p fem el commit
-
+# Si passem l'argument -p fem el commit
 file_name="version.txt"
 path="utils/" # Si es vol en la ruta del mateix github, deixar en blanc
 file_def=$path$file_name
 
+# Si passem l'argument -r
+if [[ $1 == "-r" ]]; then
+    if [[ $2 == "" ]]; then
+        rm -rf $file_def
+        echo "S'ha borrat l'archiu de versions"
+    else
+        echo "$2" > $file_def
+        echo "S'ha posat l'arxiu de versions igual a $2"
+    fi
+    exit
+fi
+
 # Comprobar si el archivo existe
-if [ ! -e file_def ]; then
-    # Si no existe, crearlo con valor inicial 0
-    echo "0" > $file_def
+if [ ! -e "$file_def" ]; then
+    # Si no existeix, crearlo amb valor inicial a 1
+    echo "1" > $file_def
 fi
 
 # Leer el valor actual del archivo
@@ -59,14 +72,13 @@ new_version=$((current_version+1))
 # Escribir el nuevo valor en el archivo
 echo "${new_version}" > $file_def
 
-commit="$2"
 # Ens guardem tots els arguments a partir del 2n (inclós)
 for arg in "${@:2}"; do
-  commit=commit$arg
+    commit=$commit" "$arg # Posem un espai entre arguments
 done
 
 if [[ $1 == "-p" ]]; then
     git add .
-    git commit -m "$new_version $commit"
+    git commit -m "v$new_version - $commit"
     git push
 fi
