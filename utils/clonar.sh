@@ -1,5 +1,5 @@
 #!/bin/bash
-
+clear
 echo "───────────────────────────────────────────────────────────────────────────"
 echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
 echo "On: -p és per a fer el commit al github, sinó nomes se copia."
