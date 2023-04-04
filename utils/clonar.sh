@@ -59,9 +59,14 @@ new_version=$((current_version+1))
 # Escribir el nuevo valor en el archivo
 echo "${new_version}" > $file_def
 
+commit="$2"
+# Ens guardem tots els arguments a partir del 2n (inclós)
+for arg in "${@:2}"; do
+  commit=commit$arg
+done
 
 if [[ $1 == "-p" ]]; then
     git add .
-    git commit -m "$new_version $2$3"
+    git commit -m "$new_version $commit"
     git push
 fi
