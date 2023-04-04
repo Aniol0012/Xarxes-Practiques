@@ -11,25 +11,33 @@ cd Xarxes-Practica-1
 
 # Si pasem el argument -p fem el commit
 
+file_name="version.txt"
+rute="/utils" # Si es vol en la ruta del mateix github, deixar en blanc
+file_def=$file_name$rute
 
 # Comprobar si el archivo existe
 if [ ! -e version ]; then
     # Si no existe, crearlo con valor inicial 0
-    echo "0" > version
+    echo "0" > $file_def
 fi
 
 # Leer el valor actual del archivo
-current_version=$(cat version)
+current_version=$(cat $file_def)
 
 # Incrementar el valor en una unidad
 new_version=$((current_version+1))
 
 # Escribir el nuevo valor en el archivo
-echo "${new_version}" > version
+echo "${new_version}" > $file_def
 
 
 if [[ $1 == "-p" ]]; then
     git add .
-    git commit -m "$new_version"
+    #git commit -m "$new_version"
+    git commit -m "test"
     git push
 fi
+
+version_control() {
+    
+}
