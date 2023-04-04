@@ -7,7 +7,8 @@ common_help_panel() {
     echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
     es printarà en numero de versió actual"
     echo "-r per a començar amb la versió igual a 1"
-    echo "-r <versió> per a posar la versió desitjada"
+    echo "-r <versió> per a posar la versió desitjada (es recomanable
+    posar-ho en el nombre de commit que ens trobem actualment)"
     echo "───────────────────────────────────────────────────────────────────────────"
 }
 
