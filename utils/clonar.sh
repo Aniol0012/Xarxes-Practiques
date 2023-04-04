@@ -1,5 +1,11 @@
 #!/bin/bash
 
+echo "───────────────────────────────────────────────────────────────────────────"
+echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
+echo "On: -p és per a fer el commit al github, sinó nomes se copia."
+echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
+es printarà en numero de versió actual"
+echo "───────────────────────────────────────────────────────────────────────────"
 # Clonació dels arxius de configuració i el codi al github:
 cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c client*.cfg equips.dat Makefile server server.cfg server.py Xarxes-Practica-1/src
 
