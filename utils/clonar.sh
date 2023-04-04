@@ -80,6 +80,10 @@ done
 
 if [[ $1 == "-p" ]]; then
     git add .
-    git commit -m "v$new_version - $commit"
+    if [[ $2 == "" ]];then
+       git commit -m "v$new_version"
+    else
+       git commit -m "v$new_version - $commit"
+    fi
     git push
 fi
