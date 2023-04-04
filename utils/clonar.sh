@@ -2,17 +2,30 @@
 
 clear
 
-help_panel() {
-    echo "───────────────────────────────────────────────────────────────────────────"
-    echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
+
+pre_help_panel() {
     echo "On: -p és per a fer el commit al github, sinó nomes se copia."
     echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
     es printarà en numero de versió actual"
     echo "───────────────────────────────────────────────────────────────────────────"
 }
 
+help_panel() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "Recorda que també pots fer servir: ./clonar.sh <-p <"MISSATGE">>"
+    pre_help_panel
+}
+
+help_panel2() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
+    pre_help_panel
+}
+
 if [[ $# == 0 ]]; then
     help_panel
+else
+    help_panel2
 fi
 
 # Clonació dels arxius de configuració i el codi al github:
