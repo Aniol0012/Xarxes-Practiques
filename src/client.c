@@ -1,11 +1,19 @@
 #include <stdio.h>
+
 #include <stdlib.h>
+
 #include <string.h>
+
 #include <stdbool.h> //Not used
-#include <signal.h>  //Not used
+
+#include <signal.h> //Not used
+
 #include <unistd.h>
+
 #include <arpa/inet.h>
+
 #include <sys/socket.h>
+
 #include <netinet/in.h>
 
 #define PORT 12345
@@ -34,7 +42,8 @@ char *NMS_UDP_Port = "2023";
 int socketfd;
 struct sockaddr_in server_addr;
 
-void send_message(int socketfd, const char *message)
+void send_message(int socketfd,
+                  const char *message)
 {
     ssize_t sent = send(socketfd, message, strlen(message), 0);
     if (sent < 0)
@@ -56,9 +65,12 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size)
     return received;
 }
 
+char *strdup(const char *); // Inicialitzem strdup per a poder usarla
+
 // DEFINIM LES VARIABLES AUXILIARS
 void obrir_socket();
 void read_config_file(const char *filename);
+void print_msg(char *str, int current_state);
 void print_bar();
 
 int main(int argc, char *argv[])
@@ -78,7 +90,8 @@ int main(int argc, char *argv[])
             i++;
             config_file = argv[i];
         }
-        else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+        else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc)
+        {
             i++;
             config_file = argv[i];
         }
@@ -100,6 +113,8 @@ int main(int argc, char *argv[])
     { // Printem el fitxer de configuració proporcionat en el paràmetre -c
         printf("Config file: %s\n", config_file);
     }
+
+    print_msg("Equip passa a l'estat", current_state);
 
     obrir_socket();
 
@@ -147,7 +162,8 @@ void obrir_socket()
     server_addr.sin_addr.s_addr = inet_addr(NMS_Id);
 }
 
-void read_config_file(const char *filename) {
+void read_config_file(const char *filename)
+{
     FILE *file = fopen(filename, "r");
     if (!file)
     {
@@ -156,7 +172,8 @@ void read_config_file(const char *filename) {
     }
 
     char line[256];
-    while (fgets(line, sizeof(line), file)) {
+    while (fgets(line, sizeof(line), file))
+    {
         char key[64], value[64];
         if (sscanf(line, "%63s = %63s", key, value) == 2)
         {
@@ -172,6 +189,32 @@ void read_config_file(const char *filename) {
     }
 
     fclose(file);
+}
+
+void print_msg(char *str, int current_state)
+{
+    char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
+
+    // Creem un diccionari per a cada estat
+    switch (current_state)
+    {
+    case WAIT_REG_RESPONSE:
+        strcpy(current_state_str, "WAIT_REG_RESPONSE");
+        break;
+
+    case REGISTERED:
+        strcpy(current_state_str, "REGISTERED");
+        break;
+
+    case SEND_ALIVE:
+        strcpy(current_state_str, "SEND_ALIVE");
+        break;
+
+    default:
+        strcpy(current_state_str, "DISCONNECTED");
+        break;
+    }
+    printf("MSG.  =>  %s: %s\n", str, current_state_str);
 }
 
 void print_bar()
