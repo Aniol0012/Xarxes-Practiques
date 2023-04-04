@@ -13,7 +13,7 @@ cd Xarxes-Practica-1
 
 file_name="version.txt"
 rute="/utils" # Si es vol en la ruta del mateix github, deixar en blanc
-file_def=$file_name$rute
+file_def=$rute$file_name
 
 # Comprobar si el archivo existe
 if [ ! -e version ]; then
