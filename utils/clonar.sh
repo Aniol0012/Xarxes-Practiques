@@ -33,7 +33,7 @@ cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c client*.cfg equips.dat
 # Clonació de arxius utils pero no necessaris per a realitzar la pràctica:
 cp clonar.sh Xarxes-Practica-1/utils
 
-echo "Els arxius s'han copiat correctament"
+echo "Tots els arxius s'han copiat correctament"
 
 # Després ens posicionem en la carpeta del github (Xarxes-Practica-1) per a fer el commit
 cd Xarxes-Practica-1
@@ -41,11 +41,11 @@ cd Xarxes-Practica-1
 # Si pasem el argument -p fem el commit
 
 file_name="version.txt"
-rute="utils/" # Si es vol en la ruta del mateix github, deixar en blanc
-file_def=$rute$file_name
+path="utils/" # Si es vol en la ruta del mateix github, deixar en blanc
+file_def=$path$file_name
 
 # Comprobar si el archivo existe
-if [ ! -e version ]; then
+if [ ! -e file_def ]; then
     # Si no existe, crearlo con valor inicial 0
     echo "0" > $file_def
 fi
