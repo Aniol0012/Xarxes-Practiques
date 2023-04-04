@@ -67,7 +67,7 @@ fi
 # Leer el valor actual del archivo
 current_version=$(cat $file_def)
 
-# Incrementar el valor en una unidad
+# Incrementar la versio en una unitat si es fa push, sinó es maté igual
 if [[ $1 == "-p" ]]; then
     new_version=$((current_version+1))
 else 

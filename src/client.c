@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include <stdbool.h> //Not used
+#include <stdbool.h>
 
 #include <signal.h>  //Not used
 
