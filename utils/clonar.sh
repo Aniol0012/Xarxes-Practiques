@@ -1,6 +1,6 @@
 #!/bin/bash
 
-clear
+#clear
 
 common_help_panel() {
     echo "On: -p és per a fer el commit al github, sinó nomes se copia."
@@ -24,6 +24,17 @@ help_panel2() {
     common_help_panel
 }
 
+help_panel3() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "L'us és: ./clonar.sh <-p <"MISSATGE">>"
+    common_help_panel
+}
+
+if [[ $1 == "--help" ]]; then
+    help_panel3
+    exit 0
+fi
+
 if [[ $# == 0 ]]; then
     help_panel # Si no es passen arguments
 else
@@ -35,7 +46,7 @@ fi
 github_folder_name=Xarxes-Practica-1
 
 # Clonació dels arxius de configuració i el codi al github:
-cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c *.c client*.cfg equips.dat Makefile server server.cfg server.py $github_folder_name/src
+cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client *.c client*.cfg equips.dat Makefile server server.cfg server.py $github_folder_name/src
 
 # Clonació d'arxius útils però no necessaris per a realitzar la pràctica:
 cp clonar.sh $github_folder_name/utils
