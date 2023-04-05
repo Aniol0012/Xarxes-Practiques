@@ -25,21 +25,25 @@ help_panel2() {
 }
 
 if [[ $# == 0 ]]; then
-    help_panel # Si no se passen arguments
+    help_panel # Si no es passen arguments
 else
-    help_panel2 # En cas que se passin arguments
+    help_panel2 # En cas que es passin arguments
 fi
 
-# Clonació dels arxius de configuració i el codi al github:
-cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c *.c client*.cfg equips.dat Makefile server server.cfg server.py Xarxes-Practica-1/src
+# Nom de la carpeta on es guarda la pràctica del github,
+# si es vol en una altra carpeta s'ha de posar el pwd sencer.
+github_folder_name=Xarxes-Practica-1
 
-# Clonació de arxius utils pero no necessaris per a realitzar la pràctica:
-cp clonar.sh Xarxes-Practica-1/utils
+# Clonació dels arxius de configuració i el codi al github:
+cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client client.c *.c client*.cfg equips.dat Makefile server server.cfg server.py $github_folder_name/src
+
+# Clonació d'arxius útils però no necessaris per a realitzar la pràctica:
+cp clonar.sh $github_folder_name/utils
 
 echo "Tots els arxius s'han copiat correctament"
 
 # Després ens posicionem en la carpeta del github (Xarxes-Practica-1) per a fer el commit
-cd Xarxes-Practica-1
+cd $github_folder_name
 
 # Si passem l'argument -p fem el commit
 file_name="version.txt"
@@ -58,23 +62,23 @@ if [[ $1 == "-r" ]]; then
     exit
 fi
 
-# Comprobar si el archivo existe
+# Comprova si l'arxiu existeix
 if [ ! -e "$file_def" ]; then
     # Si no existeix, crearlo amb valor inicial a 1
     echo "1" > $file_def
 fi
 
-# Leer el valor actual del archivo
+# Llexeix el valor actual del fitxer
 current_version=$(cat $file_def)
 
-# Incrementar la versio en una unitat si es fa push, sinó es maté igual
+# Incrementa la versió en una unitat si es fa push, sinó es maté igual
 if [[ $1 == "-p" ]]; then
     new_version=$((current_version+1))
 else 
     new_version=$((current_version))
 fi
 
-# Escribir el nuevo valor en el archivo
+# Escriu en nou valor a l'axriu
 echo "${new_version}" > $file_def
 
 # Ens guardem tots els arguments a partir del 2n (inclós)
@@ -91,3 +95,8 @@ if [[ $1 == "-p" ]]; then
     fi
     git push
 fi
+
+### FUTURES IMPLEMENTACIONS ###
+    # git pull
+    # git clone
+    # git rev-list --count HEAD # Retorna el numero actual de commit (s'hauria d'incrementar)
