@@ -48,6 +48,7 @@ int socketfd;
 struct sockaddr_in server_addr;
 
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
+void change_state(int new_state);
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
@@ -60,7 +61,7 @@ void print_server_info();
 // Funcions decoratives TODO
 void println(char *str);
 void print_time();
-void print_msg(char *str, int current_state);
+void print_state(char *str, int current_state);
 void print_bar();
 
 void send_message(int socketfd, const char *message) {
@@ -82,7 +83,7 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size){
 		}
 	}
 	else{
-		print_msg("S'ha rebut el missatge amb éxit", REGISTERED); // TESTING
+		print_state("S'ha rebut el missatge amb éxit", REGISTERED); // TESTING
 	}
 	buffer[received] = '\0';
 	return received;
@@ -124,7 +125,7 @@ int main(int argc, char *argv[]){
 		printf("Config file: %s\n", config_file);
 	}
 
-	print_msg("Equip passa a l'estat", current_state);
+	print_state("Equip passa a l'estat", current_state);
 
 	//sleep(1);
 	read_server_config();
@@ -152,6 +153,16 @@ int main(int argc, char *argv[]){
 		printf("Server response: %s\n", buffer);
 	}
 
+	// Afegim la petició de registre
+    char register_request[64];
+    sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
+    send_message(socketfd, register_request);
+    receive_message(socketfd, buffer, BUFFER_SIZE);
+    if (debug) {
+        printf("Server response: %s\n", buffer);
+    }
+
+	close(socketfd);
 	// Aquí es podrien afegir més interaccions amb el servidor si fos necessari.
 
 	close(socketfd);
@@ -258,6 +269,13 @@ void read_config_file(const char *filename){
 	fclose(file);
 }
 
+void change_state(int new_state) {
+    if (current_state != new_state) {
+        current_state = new_state;
+        print_state("Equip passa a l'estat", current_state);
+    }
+}
+
 char *get_pdu_type(int type) {
     switch (type) {
         case 0x00: // Petició de registre
@@ -327,7 +345,7 @@ void println(char *str) {
 	printf("%s\n", str);
 }
 
-void print_msg(char *str_given, int current_state){
+void print_state(char *str_given, int current_state){
 	char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
 
 	// Creem un diccionari per a cada estat
