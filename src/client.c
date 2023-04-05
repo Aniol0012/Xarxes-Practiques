@@ -47,6 +47,8 @@ char *NMS_MAC = NULL;
 int NMS_UDP_Port = 0;
 int NMS_TCP_Port = 0;
 
+// char* ip_client = "127.0.0.1" // ???
+
 int socketfd;
 struct sockaddr_in server_addr;
 
@@ -57,17 +59,17 @@ void obrir_socket();
 void read_config_file(const char *filename);
 char *get_pdu_type(int type);
 void read_server_config();
+void print_server_info();
 
 // Funcions decoratives TODO
+void println(char *str);
+void print_time();
 void print_msg(char *str, int current_state);
 void print_bar();
 
-void send_message(int socketfd,
-				  const char *message)
-{
+void send_message(int socketfd, const char *message) {
 	ssize_t sent = send(socketfd, message, strlen(message), 0);
-	if (sent < 0)
-	{
+	if (sent < 0){
 		perror("Error sending message");
 		exit(EXIT_FAIL);
 	}
@@ -76,81 +78,65 @@ void send_message(int socketfd,
 ssize_t receive_message(int socketfd, char *buffer, size_t size)
 {
 	ssize_t received = recv(socketfd, buffer, size - 1, 0);
-	if (received < 0)
-	{
+	if (received < 0){
 		perror("Error receiving message");
 		exit(EXIT_FAIL);
 	}
-	else
-	{
+	else{
 		print_msg("S'ha rebut el missatge amb éxit", REGISTERED); // TESTING
 	}
 	buffer[received] = '\0';
 	return received;
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]){
 	char buffer[BUFFER_SIZE];
-	int debug = 0;
 	char *config_file = NULL;
 
-	for (int i = 1; i < argc; i++)
-	{
-		if (strcmp(argv[i], "-d") == 0)
-		{
+	for (int i = 1; i < argc; i++){
+		if (strcmp(argv[i], "-d") == 0){
 			debug = true;
 		}
-		else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc)
-		{ // Mirem si s'ha proporcionat el parametre -c seguit del nom del fitxer
+		else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc){ // Mirem si s'ha proporcionat el parametre -c seguit del nom del fitxer
 			i++;
 			config_file = argv[i];
 		}
-		else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc)
-		{
+		else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc){
 			i++;
 			config_file = argv[i];
 		}
-		else
-		{
+		else{
 			fprintf(stderr, "Usage: %s [-d] [-c <config_file>]\n", argv[0]);
 			exit(EXIT_FAIL);
 		}
 	}
 
-	if (debug)
-	{
+	if (debug){
 		print_bar();
-		printf("Mode debug activat\n");
+		printf("\t\t\tMode debug activat\n");
 		print_bar();
 	}
 
-	if (config_file)
-	{ // Printem el fitxer de configuració proporcionat en el paràmetre -c
+	if (config_file){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
 		printf("Config file: %s\n", config_file);
 	}
 
 	print_msg("Equip passa a l'estat", current_state);
 
+	//sleep(1);
 	read_server_config();
 	// printf("Estat 0x09: %s\n", get_pdu_type(9)); // Te retorna ERROR
 	// Fer-ho servir per al debug
-	printf("NMS_Id: %s\n", NMS_Id);
-	printf("NMS_MAC: %s\n", NMS_MAC);
-	printf("NMS_UDP_Port: %i\n", NMS_UDP_Port);
-	printf("NMS_TCP_Port: %i\n", NMS_TCP_Port);
 
 	obrir_socket();
 
-	if (connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-	{
+	if (connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
 		perror("Error connecting to server");
 		close(socketfd);
 		exit(EXIT_FAIL);
 	}
 
-	if (debug)
-	{
+	if (debug){
 		printf("Connected to server.\n");
 	}
 
@@ -197,6 +183,22 @@ void read_server_config() {
     }
 
     fclose(file);
+
+	if (debug) {;
+		print_server_info();
+	}
+}
+
+void print_server_info() {
+	println("La informació obtinguda de l'arxiu de configuració server.cfg ha estat:");
+	print_time();
+	printf("NMS_Id: %s\n", NMS_Id);
+	print_time();
+	printf("NMS_MAC: %s\n", NMS_MAC);
+	print_time();
+	printf("NMS_UDP_Port: %i\n", NMS_UDP_Port);
+	print_time();
+	printf("NMS_TCP_Port: %i\n", NMS_TCP_Port);
 }
 
 
@@ -204,13 +206,12 @@ void obrir_socket(){
 	// Obrim el socket
 	socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
 
-	if (socketfd < 0)
-	{
+	if (socketfd < 0){
 		perror("Ha sorgit un error al crear el socket");
 		exit(EXIT_FAIL);
 	}
 
-	// Binding amb el servidor
+	// Binding del el servidor
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(NMS_UDP_Port); // Maybe TCP
 	server_addr.sin_addr.s_addr = inet_addr(NMS_Id);
@@ -285,21 +286,33 @@ char *get_pdu_type(int type) {
     }
 }
 
-void get_time(char *time_str)
-{
+///////////////////////////////// FUNCIONS PER PRINTAR /////////////////////////////////
+
+void get_time(char *time_str){
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 
 	sprintf(time_str, "%02d:%02d:%02d:", tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
-void print_msg(char *str_given, int current_state)
-{
+void print_time() {
+	if (show_local_time) {
+		char time_str[10];
+		get_time(time_str);
+		printf("%s ", time_str);
+	}
+}
+
+void println(char *str) {
+	print_time();
+	printf("%s\n", str);
+}
+
+void print_msg(char *str_given, int current_state){
 	char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
 
 	// Creem un diccionari per a cada estat
-	switch (current_state)
-	{
+	switch (current_state){
 	case WAIT_REG_RESPONSE:
 		strcpy(current_state_str, "WAIT_REG_RESPONSE");
 		break;
@@ -316,19 +329,17 @@ void print_msg(char *str_given, int current_state)
 		strcpy(current_state_str, "DISCONNECTED");
 		break;
 	}
-	if (show_local_time)
-	{
+
+	if (show_local_time){
 		char time_str[10];
 		get_time(time_str);
 		printf("%s MSG.  =>  %s: %s\n", time_str, str_given, current_state_str);
 	}
-	else
-	{
+	else{
 		printf("MSG.  =>  %s: %s\n", str_given, current_state_str);
 	}
 }
 
-void print_bar()
-{
+void print_bar(){
 	printf("───────────────────────────────────────────────────────────────────────────\n");
 }
