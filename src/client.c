@@ -19,11 +19,12 @@
 #define N 6
 #define O 2
 
-// DEFINIM ELS POSSIBLES ESTATS
-#define DISCONNECTED 0
-#define WAIT_REG_RESPONSE 1
-#define REGISTERED 2
-#define SEND_ALIVE 3
+// DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
+#define DISCONNECTED 0xA0
+#define WAIT_REG_RESPONSE 0xA2
+#define WAIT_DB_CHECK 0xA4
+#define REGISTERED 0xA6
+#define SEND_ALIVE 0xA8
 
 // DEFINIM VARIABLES PER A STRINGS
 #define MAX_INPUT 20
@@ -74,7 +75,7 @@ void send_message(int socketfd, const char *message) {
 	}
 }
 
-ssize_t receive_message(int socketfd, char *buffer, size_t size){
+ssize_t receive_message(int socketfd, char *buffer, size_t size) {
 	ssize_t received = recv(socketfd, buffer, size - 1, 0);
 	if (received < 0){
 		if (debug) {
@@ -89,7 +90,47 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size){
 	return received;
 }
 
-int main(int argc, char *argv[]){
+void send_register_request() {
+	// Obrim el socket
+	socketfd = socket(AF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
+
+	if (socketfd < 0){
+		if (debug) {
+			println("Ha sorgit un error al crear el socket");
+		}
+		exit(EXIT_FAIL);
+	}
+
+    char register_request[64];
+    sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
+
+    struct sockaddr_in server_addr_udp;
+    server_addr_udp.sin_family = AF_INET;
+    server_addr_udp.sin_port = htons(NMS_UDP_Port);
+    server_addr_udp.sin_addr.s_addr = inet_addr(NMS_Id);
+
+    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *)&server_addr_udp, sizeof(server_addr_udp));
+    if (sent < 0) {
+        if (debug) {
+        	println("Error enviant la petició de registre");
+        }
+		exit(EXIT_FAIL);
+    }
+    change_state(WAIT_REG_RESPONSE);
+
+	// GESTIÓ DEL ACK O NACK
+	/*
+	if (strncmp(buffer, "0x02", 4) == 0) { // REGISTER_ACK
+		change_state(REGISTERED);
+	} else if (strncmp(buffer, "0x04", 4) == 0 || strncmp(buffer, "0x06", 4) == 0) { // REGISTER_NACK || REGISTER_REJ
+		change_state(DISCONNECTED);
+	} else {
+		// Gestiona altres casos o errors
+	}
+	*/
+}
+
+int main(int argc, char *argv[]) {
 	char buffer[BUFFER_SIZE];
 	char *config_file = NULL;
 
@@ -122,9 +163,12 @@ int main(int argc, char *argv[]){
 	}
 
 	if (config_file){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
-		printf("Config file: %s\n", config_file);
+		if (debug) {
+			printf("Arxiu de configuració (-c): %s\n", config_file);
+		}
 	}
 
+	// Estat inicial
 	print_state("Equip passa a l'estat", current_state);
 
 	//sleep(1);
@@ -132,28 +176,47 @@ int main(int argc, char *argv[]){
 	// printf("Estat 0x09: %s\n", get_pdu_type(9)); // Te retorna ERROR
 	// Fer-ho servir per al debug
 
-	obrir_socket();
+	send_register_request();
+    ssize_t received = recv(socketfd, buffer, BUFFER_SIZE - 1, 0);
+    if (received < 0) {
+        if (debug) {
+            perror("Error rebent la resposta de registre");
+        }
+    } else {
+        buffer[received] = '\0';
+        if (debug) {
+            printf("Resposta del servidor: %s\n", buffer);
+        }
+    }
 
+	// while(sleep(WAIT_rEG_RESPONSE_SEGONS)) // S'hauria d'afegir per anar intentant-ho
+
+	// Connexio TCP
+	/*
 	if (connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+		change_state(WAIT_REG_RESPONSE);
 		if (debug) {
-			perror("Error connecting to server");
+			perror("No s'ha pogut conectar amb el servidor");
 		}
+		change_state(DISCONNECTED);
 		close(socketfd);
 		//exit(EXIT_FAIL);
+	} else {
+		change_state(REGISTERED);
 	}
-
-	if (debug){
-		printf("Connected to server.\n");
-	}
+	*/
 
 	// Comunicació amb el servidor basada en les especificacions.
+	/*
 	send_message(socketfd, "START");
 	receive_message(socketfd, buffer, BUFFER_SIZE);
 	if (debug) {
 		printf("Server response: %s\n", buffer);
 	}
+	*/
 
 	// Afegim la petició de registre
+	/*
     char register_request[64];
     sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
     send_message(socketfd, register_request);
@@ -161,8 +224,8 @@ int main(int argc, char *argv[]){
     if (debug) {
         printf("Server response: %s\n", buffer);
     }
+	*/
 
-	close(socketfd);
 	// Aquí es podrien afegir més interaccions amb el servidor si fos necessari.
 
 	close(socketfd);
@@ -231,22 +294,6 @@ void print_server_info() {
 	printf("NMS_TCP_Port: %i\n", NMS_TCP_Port);
 }
 
-
-void obrir_socket(){
-	// Obrim el socket
-	socketfd = socket(AF_INET, SOCK_STREAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
-
-	if (socketfd < 0){
-		perror("Ha sorgit un error al crear el socket");
-		exit(EXIT_FAIL);
-	}
-
-	// Binding del el servidor
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(NMS_UDP_Port); // Maybe TCP
-	server_addr.sin_addr.s_addr = inet_addr(NMS_Id);
-}
-
 void read_config_file(const char *filename){
 	FILE *file = fopen(filename, "r");
 	if (!file){
@@ -278,48 +325,55 @@ void change_state(int new_state) {
 
 char *get_pdu_type(int type) {
     switch (type) {
+		// FASE DE REGISTRE
         case 0x00: // Petició de registre
             return "REGISTER_REQ";
-        case 0x01: // Acceptació de registre
+        case 0x02: // Acceptació de registre
             return "REGISTER_ACK";
-        case 0x02: // Denegació de registre
+        case 0x04: // Denegació de registre
             return "REGISTER_NACK";
-        case 0x03: // Rebuig de registre
+        case 0x06: // Rebuig de registre
             return "REGISTER_REJ";
+		case 0x0F: // Error de protocol
+			return "ERROR";
+
+		// ESTATS D'UN EQUIP
+        case 0xA0: // Equip desconnectat
+            return "DISCONNECTED";
+        case 0xA2: // Espera de resposta a la petició de registre
+            return "WAIT_REG_RESPONSE";
+        case 0xA4: // Espera de consulta BB. DD. d’equips autoritzats
+            return "WAIT_DB_CHECK";
+        case 0xA6: // Equip registrat, sense intercanvi ALIVE
+            return "REGISTERED";
+        case 0xA8: // Equip enviant i rebent paquets de ALIVE
+            return "SEND_ALIVE";
+
+		// TIPUS DE PAQUET MANTENIMENT DE COMUNICACIÓ
         case 0x10: // Enviament d’informació d’alive
             return "ALIVE_INF";
-        case 0x11: // Confirmació de recepció d’informació d’alive
+        case 0x12: // Confirmació de recepció d’informació d’alive
             return "ALIVE_ACK";
-        case 0x12: // Denegació de recepció d’informació d’alive
+        case 0x14: // Denegació de recepció d’informació d’alive
             return "ALIVE_NACK";
-        case 0x13: // Rebuig de recepció d’informació d’alive
+        case 0x16: // Rebuig de recepció d’informació d’alive
             return "ALIVE_REJ";
+
+		// TIPUS PAQUET ENVIAMENT ARXIU
         case 0x20: // Petició d’enviament d’arxiu de configuració
             return "SEND_FILE";
-        case 0x21: // Acceptació de la petició d’enviament d’arxiu de configuració
-            return "SEND_ACK";
-        case 0x22: // Denegació de la petició d’enviament d’arxiu de configuració
-            return "SEND_NACK";
-        case 0x23: // Rebuig de la petició d’enviament d’arxiu de configuració
-            return "SEND_REJ";
-        case 0x24: // Bloc de dades de l’arxiu de configuració
+        case 0x22: // Bloc de dades de l’arxiu de configuració
             return "SEND_DATA";
-        case 0x25: // Fi de l’enviament de dades de l’arxiu de configuració
+        case 0x24: // Acceptació de la petició d’enviament d’arxiu de configuració
+            return "SEND_ACK";
+        case 0x26: // Denegació de la petició d’enviament d’arxiu de configuració
+            return "SEND_NACK";
+        case 0x28: // Rebuig de la petició d’enviament d’arxiu de configuració
+            return "SEND_REJ";
+        case 0x2A: // Fi de l’enviament de dades de l’arxiu de configuració
             return "SEND_END";
-        case 0x30: // Petició d’obtenció d’arxiu de configuració
-            return "GET_FILE";
-        case 0x31: // Acceptació d’obtenció d’arxiu de configuració
-            return "GET_ACK";
-        case 0x32: // Denegació d’obtenció d’arxiu de configuració
-            return "GET_NACK";
-        case 0x33: // Rebuig d’obtenció d’arxiu de configuració
-            return "GET_REJ";
-        case 0x34: // Bloc de dades de l’arxiu de configuració
-            return "GET_DATA";
-        case 0x35: // Fi de l’obtenció de l’arxiu de configuració
-            return "GET_END";
-        default:
-            return "ERROR"; // Error de protocol (0x09)
+        default: // Cas desconegut
+            return "DESCONEGUT";
     }
 }
 
@@ -350,21 +404,25 @@ void print_state(char *str_given, int current_state){
 
 	// Creem un diccionari per a cada estat
 	switch (current_state){
-	case WAIT_REG_RESPONSE:
-		strcpy(current_state_str, "WAIT_REG_RESPONSE");
-		break;
+		case WAIT_REG_RESPONSE:
+			strcpy(current_state_str, "WAIT_REG_RESPONSE");
+			break;
 
-	case REGISTERED:
-		strcpy(current_state_str, "REGISTERED");
-		break;
+		case WAIT_DB_CHECK:
+			strcpy(current_state_str, "WAIT_DB_CHECK");
+			break;
 
-	case SEND_ALIVE:
-		strcpy(current_state_str, "SEND_ALIVE");
-		break;
+		case REGISTERED:
+			strcpy(current_state_str, "REGISTERED");
+			break;
 
-	default:
-		strcpy(current_state_str, "DISCONNECTED");
-		break;
+		case SEND_ALIVE:
+			strcpy(current_state_str, "SEND_ALIVE");
+			break;
+
+		default:
+			strcpy(current_state_str, "DISCONNECTED");
+			break;
 	}
 
 	if (show_local_time){
