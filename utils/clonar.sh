@@ -3,12 +3,12 @@
 #clear
 
 common_help_panel() {
-    echo "On: -p és per a fer el commit al github, sinó nomes se copia."
-    echo "MISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
-    es printarà en numero de versió actual"
-    echo "-r per a començar amb la versió igual a 1"
-    echo "-r <versió> per a posar la versió desitjada (es recomanable
-    posar-ho en el nombre de commit que ens trobem actualment)"
+    echo -e "On: \n\t-p és per a fer el commit al github, sinó nomes se copia."
+    echo -e "\tMISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
+        es printarà en numero de versió actual"
+    echo -e "\t-r per a començar amb la versió igual a 1"
+    echo -e "\t-r <versió> per a posar la versió desitjada (es recomanable
+        posar-ho en el nombre de commit que ens trobem actualment)"
     echo "───────────────────────────────────────────────────────────────────────────"
 }
 

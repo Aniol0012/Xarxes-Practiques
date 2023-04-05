@@ -1,21 +1,13 @@
 #include <stdio.h>
-
 #include <stdlib.h>
-
 #include <time.h>
-
 #include <string.h>
-
 #include <stdbool.h>
-
 #include <signal.h> //Not used
-
+#include <pthread.h>
 #include <unistd.h>
-
 #include <arpa/inet.h>
-
 #include <sys/socket.h>
-
 #include <netinet/in.h>
 
 // #define PORT 12345
@@ -32,6 +24,9 @@
 #define WAIT_REG_RESPONSE 1
 #define REGISTERED 2
 #define SEND_ALIVE 3
+
+// DEFINIM VARIABLES PER A STRINGS
+#define MAX_INPUT 20
 
 int current_state = DISCONNECTED;
 bool show_local_time = true;
@@ -55,6 +50,7 @@ struct sockaddr_in server_addr;
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 
 // DEFINIM LES VARIABLES AUXILIARS
+void *wait_quit(void *arg);
 void obrir_socket();
 void read_config_file(const char *filename);
 char *get_pdu_type(int type);
@@ -70,17 +66,20 @@ void print_bar();
 void send_message(int socketfd, const char *message) {
 	ssize_t sent = send(socketfd, message, strlen(message), 0);
 	if (sent < 0){
-		perror("Error sending message");
-		exit(EXIT_FAIL);
+		if (debug) {
+			perror("Error sending message");
+		//exit(EXIT_FAIL);
+		}
 	}
 }
 
-ssize_t receive_message(int socketfd, char *buffer, size_t size)
-{
+ssize_t receive_message(int socketfd, char *buffer, size_t size){
 	ssize_t received = recv(socketfd, buffer, size - 1, 0);
 	if (received < 0){
-		perror("Error receiving message");
-		exit(EXIT_FAIL);
+		if (debug) {
+			perror("Error receiving message");
+		//exit(EXIT_FAIL);
+		}
 	}
 	else{
 		print_msg("S'ha rebut el missatge amb éxit", REGISTERED); // TESTING
@@ -92,6 +91,10 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size)
 int main(int argc, char *argv[]){
 	char buffer[BUFFER_SIZE];
 	char *config_file = NULL;
+
+	pthread_t wait_quit_thread; // Creem el fil per a l'espera de la comanda
+	pthread_create(&wait_quit_thread, NULL, wait_quit, NULL); // Iniciem el fil concurrent
+
 
 	for (int i = 1; i < argc; i++){
 		if (strcmp(argv[i], "-d") == 0){
@@ -106,7 +109,7 @@ int main(int argc, char *argv[]){
 			config_file = argv[i];
 		}
 		else{
-			fprintf(stderr, "Usage: %s [-d] [-c <config_file>]\n", argv[0]);
+			fprintf(stderr, "Ús: %s [-d] [-c <config_file>]\n", argv[0]);
 			exit(EXIT_FAIL);
 		}
 	}
@@ -131,9 +134,11 @@ int main(int argc, char *argv[]){
 	obrir_socket();
 
 	if (connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
-		perror("Error connecting to server");
+		if (debug) {
+			perror("Error connecting to server");
+		}
 		close(socketfd);
-		exit(EXIT_FAIL);
+		//exit(EXIT_FAIL);
 	}
 
 	if (debug){
@@ -141,13 +146,11 @@ int main(int argc, char *argv[]){
 	}
 
 	// Comunicació amb el servidor basada en les especificacions.
-	send_message(socketfd, "HELLO");
-	receive_message(socketfd, buffer, BUFFER_SIZE);
-	printf("Server response: %s\n", buffer);
-
 	send_message(socketfd, "START");
 	receive_message(socketfd, buffer, BUFFER_SIZE);
-	printf("Server response: %s\n", buffer);
+	if (debug) {
+		printf("Server response: %s\n", buffer);
+	}
 
 	// Aquí es podrien afegir més interaccions amb el servidor si fos necessari.
 
@@ -157,7 +160,23 @@ int main(int argc, char *argv[]){
 	free(NMS_Id);
     free(NMS_MAC);
 	*/
+	pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
 	return 0;
+}
+
+void *wait_quit(void *arg) {
+	char input[MAX_INPUT];
+	while (1) {
+        fgets(input, MAX_INPUT, stdin);
+        input[strcspn(input, "\n")] = 0; // Eliminem el salt de linea
+        if (strcmp(input, "quit") == 0) {
+            if (debug) {
+				printf("El programa s'ha aturat.\n");
+			}
+    		exit(EXIT_SUCCESS);
+        }
+    }
+    return NULL;
 }
 
 void read_server_config() {
