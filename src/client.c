@@ -10,8 +10,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-// #define PORT 12345
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 1024 // Tocar aixo
 #define T 1
 #define P 2
 #define Q 3
@@ -43,17 +42,18 @@ char *NMS_MAC = NULL;
 int NMS_UDP_Port = 0;
 int NMS_TCP_Port = 0;
 
-// char* ip_client = "127.0.0.1" // ???
+char* client_ip = "127.0.0.1";
 
 int socketfd;
 struct sockaddr_in server_addr;
+char buffer[BUFFER_SIZE];
 
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
+void send_register_request();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
-void obrir_socket();
 void read_config_file(const char *filename);
 char *get_pdu_type(int type);
 void read_server_config();
@@ -65,6 +65,7 @@ void print_time();
 void print_state(char *str, int current_state);
 void print_bar();
 
+/*
 void send_message(int socketfd, const char *message) {
 	ssize_t sent = send(socketfd, message, strlen(message), 0);
 	if (sent < 0){
@@ -74,6 +75,7 @@ void send_message(int socketfd, const char *message) {
 		}
 	}
 }
+*/
 
 ssize_t receive_message(int socketfd, char *buffer, size_t size) {
 	ssize_t received = recv(socketfd, buffer, size - 1, 0);
@@ -91,7 +93,7 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size) {
 }
 
 void send_register_request() {
-	// Obrim el socket
+	// Obrim un socket UDP
 	socketfd = socket(AF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
 
 	if (socketfd < 0){
@@ -101,37 +103,61 @@ void send_register_request() {
 		exit(EXIT_FAIL);
 	}
 
+	// Fer el bind del servidor per a configurar el port IDK LA VD
+	struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+	// Crec que el bind s'ha de fer amb el del client MODIFICAR!!!!!!!!!!!!!!!!!
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(0); // 0 permite que el sistema elija un puerto disponible
+    //local_addr.sin_addr.s_addr = inet_addr(client_ip); // htonl(INADDR_ANY);
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {        
+		if (debug) {
+            perror("Error en bind");
+        }
+        exit(EXIT_FAIL);
+    }
+
     char register_request[64];
     sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
 
+	printf("%i\n", NMS_UDP_Port);
+	printf("%s\n",NMS_Id);
+
     struct sockaddr_in server_addr_udp;
+	memset(&server_addr_udp, 0, sizeof(server_addr_udp));// Ptsr no fa falta
     server_addr_udp.sin_family = AF_INET;
     server_addr_udp.sin_port = htons(NMS_UDP_Port);
     server_addr_udp.sin_addr.s_addr = inet_addr(NMS_Id);
 
-    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *)&server_addr_udp, sizeof(server_addr_udp));
-    if (sent < 0) {
+    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
+	
+	//sleep(5);
+	printf("\nCodi de retorn del sendto: %li\n", sent); // Esta retornant -1
+    
+	if (sent < 0) {
         if (debug) {
-        	println("Error enviant la petició de registre");
+        	println("Error a l'enviar la petició de registre"); // Esta fallant aqui
         }
 		exit(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
 
 	// GESTIÓ DEL ACK O NACK
-	/*
+	
 	if (strncmp(buffer, "0x02", 4) == 0) { // REGISTER_ACK
 		change_state(REGISTERED);
 	} else if (strncmp(buffer, "0x04", 4) == 0 || strncmp(buffer, "0x06", 4) == 0) { // REGISTER_NACK || REGISTER_REJ
 		change_state(DISCONNECTED);
 	} else {
+		change_state(DISCONNECTED); // Millorar
 		// Gestiona altres casos o errors
 	}
-	*/
+	
 }
 
 int main(int argc, char *argv[]) {
-	char buffer[BUFFER_SIZE];
 	char *config_file = NULL;
 
 	pthread_t wait_quit_thread; // Creem el fil per a l'espera de la comanda
