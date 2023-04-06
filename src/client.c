@@ -37,10 +37,20 @@ bool debug = false;
 #define EXIT_FAIL -1
 
 // ARXIU DE CONFIGURACIÓ
-char *Id = NULL;
+static char *Id = NULL;
 char *MAC = NULL;
 char *NMS_Id = NULL;
 int NMS_UDP_Port = 0;
+
+//#pragma pack(push, 1)
+struct Package {
+	unsigned char type;
+    char id[7];
+    char mac[13];
+    char random_number[7];
+    char data[50];
+};
+//#pragma pack(pop)
 
 char* client_ip = "127.0.0.1";
 
@@ -54,6 +64,7 @@ void send_register_request();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
+int get_type_from_str(char *str);
 char *get_pdu_type(int type);
 void read_client_config(const char *config_file); // read_config_file ptsr millor nom
 void print_client_info();
@@ -112,7 +123,7 @@ int main(int argc, char *argv[]) {
 			config_file = argv[i];
 		}
 		else{
-			fprintf(stderr, "Ús: %s [-d] [-c <config_file>]\n", argv[0]);
+			fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>]\n", argv[0]);
 			exit(EXIT_FAIL);
 		}
 	}
@@ -124,7 +135,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (config_file && debug){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
-		printf("Arxiu de configuració (-c): %s\n", config_file);
+		print_time();
+		// Abans de printar aquest missatge, s'hauria de verificar que l'arxiu és correcte
+		printf("S'ha carregat l'arxiu de configuració (-c): %s\n", config_file);
 	}
 
 	// Estat inicial
@@ -136,17 +149,6 @@ int main(int argc, char *argv[]) {
 	// Fer-ho servir per al debug
 
 	send_register_request();
-    ssize_t received = recv(socketfd, buffer, BUFFER_SIZE - 1, 0);
-    if (received < 0) {
-        if (debug) {
-            perror("Error rebent la resposta de registre");
-        }
-    } else {
-        buffer[received] = '\0';
-        if (debug) {
-            printf("Resposta del servidor: %s\n", buffer);
-        }
-    }
 
 	// while(sleep(WAIT_rEG_RESPONSE_SEGONS)) // S'hauria d'afegir per anar intentant-ho
 
@@ -208,10 +210,9 @@ void send_register_request() {
 		exit(EXIT_FAIL);
 	}
 
-	// Fer el bind del servidor per a configurar el port IDK LA VD
+	// Fem el binding
 	struct sockaddr_in local_addr;
     memset(&local_addr, 0, sizeof(local_addr));
-	// Crec que el bind s'ha de fer amb el del client MODIFICAR!!!!!!!!!!!!!!!!!
     local_addr.sin_family = AF_INET;
     local_addr.sin_port = htons(0); // 0 permite que el sistema elija un puerto disponible
     //local_addr.sin_addr.s_addr = inet_addr(client_ip); // htonl(INADDR_ANY);
@@ -219,31 +220,37 @@ void send_register_request() {
 
     if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {        
 		if (debug) {
-            perror("Error en bind");
+            println("Error al fer el binding");
         }
         exit(EXIT_FAIL); 
     }
 
-    char register_request[64];
-	printf("%s\n",NMS_Id);
-    sprintf(register_request, "0x00 %s %s", NMS_Id, MAC);
+	// REVISAR UNSIGNED INTS
+	unsigned int retorno = 0x00; //get_type_from_str("REGISTER_REQ");
+	printf("\n%x\n",retorno);
 
-	printf("%i\n", NMS_UDP_Port);
+	struct Package register_request;
+	register_request.type = 0x00; // REGISTER_REQ
+	strcpy(register_request.id, Id);
+    strcpy(register_request.mac, MAC);
+    strcpy(register_request.random_number, "10");
+    strcpy(register_request.data, "");
+
 
     struct sockaddr_in server_addr_udp;
-	memset(&server_addr_udp, 0, sizeof(server_addr_udp));// Ptsr no fa falta
+	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
-    server_addr_udp.sin_port = htons(NMS_UDP_Port);
-    server_addr_udp.sin_addr.s_addr = inet_addr(NMS_Id);
+    server_addr_udp.sin_port = htons(NMS_UDP_Port); 
+    server_addr_udp.sin_addr.s_addr = inet_addr("127.0.0.1"); // NMS_Id
 
-    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
+    ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
 	//sleep(5);
 	printf("\nCodi de retorn del sendto: %li\n", sent); // Esta retornant -1
     
 	if (sent < 0) {
         if (debug) {
-        	println("Error a l'enviar la petició de registre"); // Esta fallant aqui
+        	println("Error a l'enviar la petició de registre");
         }
 		exit(EXIT_FAIL);
     }
@@ -330,6 +337,20 @@ void change_state(int new_state) {
         print_state("Equip passa a l'estat", current_state);
     }
 }
+
+int get_type_from_str(char *str) {
+    for (int i = 0; ; i++) {
+        char *type_str = get_pdu_type(i);
+        if (strcmp(type_str, "DESCONEGUT") == 0) {
+            break;
+        }
+        if (strcmp(str, type_str) == 0) {
+            return i;
+        }
+    }
+    return -1; // Si no se encuentra el tipo en la lista, retorna -1
+}
+
 
 char *get_pdu_type(int type) {
     switch (type) {
