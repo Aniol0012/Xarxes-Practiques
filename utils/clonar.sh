@@ -62,30 +62,7 @@ echo "Tots els arxius s'han copiat correctament"
 cd $github_folder_name
 
 # Copiem el git per a que el VSCode pugui fer un seguiment
-#cp -f .git ..
-# Directori origen
-src_dir=".git"
-
-# Directori destí
-dst_dir=".."
-
-# Creem el directori destí si no existeix
-if [ ! -d "$dst_dir" ]; then
-  mkdir "$dst_dir"
-fi
-
-# Recorrem el contingut del directori origen
-for file in "$src_dir"/*; do
-  # Copiem el fitxer o directori al directori destí
-  if [ -d "$file" ]; then
-    mkdir "$dst_dir/${file##*/}"
-    for subfile in "$file"/*; do
-      cp "$subfile" "$dst_dir/${file##*/}"
-    done
-  else
-    cp "$file" "$dst_dir"
-  fi
-done
+cp -r .git .. > /bin/trash &2>1
 
 # Si passem l'argument -p fem el commit
 file_name="version.txt"
