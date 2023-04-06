@@ -221,7 +221,7 @@ void send_register_request() {
 		if (debug) {
             perror("Error en bind");
         }
-        exit(EXIT_FAIL);
+        exit(EXIT_FAIL); //
     }
 
     char register_request[64];
