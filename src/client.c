@@ -258,7 +258,7 @@ void send_register_request() {
 	} else {
 		change_state(DISCONNECTED); // Millorar
 		// Gestiona altres casos o errors
-	}
+	}//
 	
 }
 
