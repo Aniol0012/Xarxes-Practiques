@@ -36,11 +36,11 @@ bool debug = false;
 #define EXIT_SUCCESS 0
 #define EXIT_FAIL -1
 
-// CONFIGURACIÓ DEL SERVIDOR
+// ARXIU DE CONFIGURACIÓ
+char *Id = NULL;
+char *MAC = NULL;
 char *NMS_Id = NULL;
-char *NMS_MAC = NULL;
 int NMS_UDP_Port = 0;
-int NMS_TCP_Port = 0;
 
 char* client_ip = "127.0.0.1";
 
@@ -54,10 +54,9 @@ void send_register_request();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
-void read_config_file(const char *filename);
 char *get_pdu_type(int type);
-void read_server_config();
-void print_server_info();
+void read_client_config(const char *config_file); // read_config_file ptsr millor nom
+void print_client_info();
 
 // Funcions decoratives TODO
 void println(char *str);
@@ -77,6 +76,7 @@ void send_message(int socketfd, const char *message) {
 }
 */
 
+
 ssize_t receive_message(int socketfd, char *buffer, size_t size) {
 	ssize_t received = recv(socketfd, buffer, size - 1, 0);
 	if (received < 0){
@@ -90,71 +90,6 @@ ssize_t receive_message(int socketfd, char *buffer, size_t size) {
 	}
 	buffer[received] = '\0';
 	return received;
-}
-
-void send_register_request() {
-	// Obrim un socket UDP
-	socketfd = socket(AF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
-
-	if (socketfd < 0){
-		if (debug) {
-			println("Ha sorgit un error al crear el socket");
-		}
-		exit(EXIT_FAIL);
-	}
-
-	// Fer el bind del servidor per a configurar el port IDK LA VD
-	struct sockaddr_in local_addr;
-    memset(&local_addr, 0, sizeof(local_addr));
-	// Crec que el bind s'ha de fer amb el del client MODIFICAR!!!!!!!!!!!!!!!!!
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = htons(0); // 0 permite que el sistema elija un puerto disponible
-    //local_addr.sin_addr.s_addr = inet_addr(client_ip); // htonl(INADDR_ANY);
-    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {        
-		if (debug) {
-            perror("Error en bind");
-        }
-        exit(EXIT_FAIL);
-    }
-
-    char register_request[64];
-    sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
-
-	printf("%i\n", NMS_UDP_Port);
-	printf("%s\n",NMS_Id);
-
-    struct sockaddr_in server_addr_udp;
-	memset(&server_addr_udp, 0, sizeof(server_addr_udp));// Ptsr no fa falta
-    server_addr_udp.sin_family = AF_INET;
-    server_addr_udp.sin_port = htons(NMS_UDP_Port);
-    server_addr_udp.sin_addr.s_addr = inet_addr(NMS_Id);
-
-    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
-	
-	//sleep(5);
-	printf("\nCodi de retorn del sendto: %li\n", sent); // Esta retornant -1
-    
-	if (sent < 0) {
-        if (debug) {
-        	println("Error a l'enviar la petició de registre"); // Esta fallant aqui
-        }
-		exit(EXIT_FAIL);
-    }
-    change_state(WAIT_REG_RESPONSE);
-
-	// GESTIÓ DEL ACK O NACK
-	
-	if (strncmp(buffer, "0x02", 4) == 0) { // REGISTER_ACK
-		change_state(REGISTERED);
-	} else if (strncmp(buffer, "0x04", 4) == 0 || strncmp(buffer, "0x06", 4) == 0) { // REGISTER_NACK || REGISTER_REJ
-		change_state(DISCONNECTED);
-	} else {
-		change_state(DISCONNECTED); // Millorar
-		// Gestiona altres casos o errors
-	}
-	
 }
 
 int main(int argc, char *argv[]) {
@@ -188,17 +123,15 @@ int main(int argc, char *argv[]) {
 		print_bar();
 	}
 
-	if (config_file){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
-		if (debug) {
-			printf("Arxiu de configuració (-c): %s\n", config_file);
-		}
+	if (config_file && debug){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
+		printf("Arxiu de configuració (-c): %s\n", config_file);
 	}
 
 	// Estat inicial
 	print_state("Equip passa a l'estat", current_state);
 
 	//sleep(1);
-	read_server_config();
+	read_client_config(config_file);
 	// printf("Estat 0x09: %s\n", get_pdu_type(9)); // Te retorna ERROR
 	// Fer-ho servir per al debug
 
@@ -244,10 +177,10 @@ int main(int argc, char *argv[]) {
 	// Afegim la petició de registre
 	/*
     char register_request[64];
-    sprintf(register_request, "0x00 %s %s", NMS_Id, NMS_MAC);
+    if (debug) {
+    sprintf(register_request, "0x00 %s %s", NMS_Id, MAC);
     send_message(socketfd, register_request);
     receive_message(socketfd, buffer, BUFFER_SIZE);
-    if (debug) {
         printf("Server response: %s\n", buffer);
     }
 	*/
@@ -258,10 +191,75 @@ int main(int argc, char *argv[]) {
 	
 	/* S'hauria d'usar quan ja no se vulguin més
 	free(NMS_Id);
-    free(NMS_MAC);
+	return 0;
+    free(MAC);
 	*/
 	pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
-	return 0;
+}
+
+void send_register_request() {
+	// Obrim un socket UDP
+	socketfd = socket(AF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
+
+	if (socketfd < 0){
+		if (debug) {
+			println("Ha sorgit un error al crear el socket");
+		}
+		exit(EXIT_FAIL);
+	}
+
+	// Fer el bind del servidor per a configurar el port IDK LA VD
+	struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+	// Crec que el bind s'ha de fer amb el del client MODIFICAR!!!!!!!!!!!!!!!!!
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(0); // 0 permite que el sistema elija un puerto disponible
+    //local_addr.sin_addr.s_addr = inet_addr(client_ip); // htonl(INADDR_ANY);
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {        
+		if (debug) {
+            perror("Error en bind");
+        }
+        exit(EXIT_FAIL);
+    }
+
+    char register_request[64];
+	printf("%s\n",NMS_Id);
+    sprintf(register_request, "0x00 %s %s", NMS_Id, MAC);
+
+	printf("%i\n", NMS_UDP_Port);
+
+    struct sockaddr_in server_addr_udp;
+	memset(&server_addr_udp, 0, sizeof(server_addr_udp));// Ptsr no fa falta
+    server_addr_udp.sin_family = AF_INET;
+    server_addr_udp.sin_port = htons(NMS_UDP_Port);
+    server_addr_udp.sin_addr.s_addr = inet_addr(NMS_Id);
+
+    ssize_t sent = sendto(socketfd, register_request, strlen(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
+	
+	//sleep(5);
+	printf("\nCodi de retorn del sendto: %li\n", sent); // Esta retornant -1
+    
+	if (sent < 0) {
+        if (debug) {
+        	println("Error a l'enviar la petició de registre"); // Esta fallant aqui
+        }
+		exit(EXIT_FAIL);
+    }
+    change_state(WAIT_REG_RESPONSE);
+
+	// GESTIÓ DEL ACK O NACK
+	
+	if (strncmp(buffer, "0x02", 4) == 0) { // REGISTER_ACK
+		change_state(REGISTERED);
+	} else if (strncmp(buffer, "0x04", 4) == 0 || strncmp(buffer, "0x06", 4) == 0) { // REGISTER_NACK || REGISTER_REJ
+		change_state(DISCONNECTED);
+	} else {
+		change_state(DISCONNECTED); // Millorar
+		// Gestiona altres casos o errors
+	}
+	
 }
 
 void *wait_quit(void *arg) {
@@ -279,67 +277,51 @@ void *wait_quit(void *arg) {
     return NULL;
 }
 
-void read_server_config() {
-    FILE *file = fopen("server.cfg", "r");
+void read_client_config(const char *config_file) { // Si se passa per paràmetre un altre arxiu s'agafa aquell
+    FILE *file;
+    if (config_file) {
+        file = fopen(config_file, "r");
+    } else {
+        file = fopen("client.cfg", "r");
+    }
     if (file == NULL) {
-        perror("Error a l'obrir l'arxiu server.cfg");
+        perror("Error a l'obrir l'arxiu de configuració");
         exit(EXIT_FAIL);
     }
 
     char line[64];
-    while (fgets(line, sizeof(line), file) != NULL) {
-        if (strncmp(line, "Id", 2) == 0) {
-            NMS_Id = malloc(16 * sizeof(char));
-            sscanf(line, "Id %15s", NMS_Id);
-        } else if (strncmp(line, "MAC", 3) == 0) {
-            NMS_MAC = malloc(13 * sizeof(char));
-            sscanf(line, "MAC %12s", NMS_MAC);
-        } else if (strncmp(line, "UDP-port", 8) == 0) {
-            sscanf(line, "UDP-port %d", &NMS_UDP_Port);
-        } else if (strncmp(line, "TCP-port", 8) == 0) {
-            sscanf(line, "TCP-port %d", &NMS_TCP_Port);
-        }
-    }
+	while (fgets(line, sizeof(line), file) != NULL) {
+		if (strncmp(line, "Id", 2) == 0) {
+			Id = malloc(16 * sizeof(char));
+			sscanf(line, "Id %15s", Id);
+		} else if (strncmp(line, "MAC", 3) == 0) {
+			MAC = malloc(13 * sizeof(char));
+			sscanf(line, "MAC %12s", MAC);
+		} else if (strncmp(line, "NMS-Id", 6) == 0) {
+			NMS_Id = malloc(64 * sizeof(char));
+			sscanf(line, "NMS-Id %63s", NMS_Id);
+		} else if (strncmp(line, "NMS-UDP-port", 12) == 0) {
+			sscanf(line, "NMS-UDP-port %d", &NMS_UDP_Port);
+		}
+	}
 
     fclose(file);
 
 	if (debug) {;
-		print_server_info();
+		print_client_info();
 	}
 }
 
-void print_server_info() {
-	println("La informació obtinguda de l'arxiu de configuració server.cfg ha estat:");
+void print_client_info() {
+	println("La informació obtinguda de l'arxiu de configuració client.cfg ha estat:");
 	print_time();
-	printf("NMS_Id: %s\n", NMS_Id);
+	printf("Id: %s\n", Id);
 	print_time();
-	printf("NMS_MAC: %s\n", NMS_MAC);
+	printf("MAC: %s\n", MAC);
+	print_time();
+	printf("NMS-Id: %s\n", NMS_Id);
 	print_time();
 	printf("NMS_UDP_Port: %i\n", NMS_UDP_Port);
-	print_time();
-	printf("NMS_TCP_Port: %i\n", NMS_TCP_Port);
-}
-
-void read_config_file(const char *filename){
-	FILE *file = fopen(filename, "r");
-	if (!file){
-		perror("Error al obrir l'axiu de configuració");
-		exit(EXIT_FAIL);
-	}
-
-	char line[256];
-	while (fgets(line, sizeof(line), file)){
-		char key[64], value[64];
-		if (sscanf(line, "%63s = %63s", key, value) == 2){
-			if (strcmp(key, "NMS_Id") == 0){
-				NMS_Id = strdup(value); // Maybe un atoi()
-			} else if (strcmp(key, "NMS_UDP_Port") == 0){
-				NMS_UDP_Port = atoi(strdup(value));
-			}
-		}
-	}
-
-	fclose(file);
 }
 
 void change_state(int new_state) {
