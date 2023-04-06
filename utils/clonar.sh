@@ -68,7 +68,7 @@ else
 fi
 
 # Escriu en nou valor a l'axriu
-echo "${new_version}" > $file_def
+#echo "${new_version}" > $file_def
 
 # Ens guardem tots els arguments a partir del 2n (inclós)
 for arg in "${@:2}"; do

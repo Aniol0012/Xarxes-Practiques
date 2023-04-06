@@ -246,7 +246,7 @@ void send_register_request() {
         	println("Error a l'enviar la petició de registre"); // Esta fallant aqui
         }
 		exit(EXIT_FAIL);
-    }//
+    }
     change_state(WAIT_REG_RESPONSE);
 
 	// GESTIÓ DEL ACK O NACK
