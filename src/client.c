@@ -61,6 +61,7 @@ char buffer[BUFFER_SIZE];
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
 void send_register_request();
+void wait_for_ack();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
@@ -243,8 +244,7 @@ void send_register_request() {
     ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
 	//sleep(5);
-	printf("\nCodi de retorn del sendto: %li\n", sent);
-    
+
 	if (sent < 0) {
         if (debug) {
         	println("Error a l'enviar la petició de registre");
