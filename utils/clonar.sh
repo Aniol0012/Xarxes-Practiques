@@ -59,7 +59,6 @@ fi
 # Llexeix el valor actual del fitxer
 #current_version=$(cat $file_def)
 current_version=$(echo $(git rev-list --count HEAD))
-current_version=$($current_version+1)
 
 # Incrementa la versió en una unitat si es fa push, sinó es maté igual
 if [[ $1 == "-p" ]]; then
@@ -79,9 +78,9 @@ done
 if [[ $1 == "-p" ]]; then
     git add .
     if [[ $2 == "" ]];then
-       git commit -m "v$current_version"
+       git commit -m "v$new_version"
     else
-       git commit -m "v$current_version - $commit"
+       git commit -m "v$new_version - $commit"
     fi
     git push
 fi
