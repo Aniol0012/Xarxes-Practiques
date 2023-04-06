@@ -7,6 +7,34 @@
     # git clone
     # git rev-list --count HEAD # Retorna el numero actual de commit (s'hauria d'incrementar)
 
+common_help_panel() {
+    echo -e "On: \n\t-p és per a fer el commit al github, sinó nomes se copia."
+    echo -e "\tMISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
+        es printarà en numero de versió actual"
+    echo -e "\t-r per a començar amb la versió igual a 1"
+    echo -e "\t-r <versió> per a posar la versió desitjada (es recomanable
+        posar-ho en el nombre de commit que ens trobem actualment)"
+    echo "───────────────────────────────────────────────────────────────────────────"
+}
+
+help_panel() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "Recorda que també pots fer servir: ./clonar.sh <-p <"MISSATGE">>"
+    common_help_panel
+}
+
+help_panel2() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
+    common_help_panel
+}
+
+help_panel3() {
+    echo "───────────────────────────────────────────────────────────────────────────"
+    echo "L'us és: ./clonar.sh <-p <"MISSATGE">>"
+    common_help_panel
+}
+
 if [[ $1 == "--help" ]]; then
     help_panel3
     exit 0
@@ -84,30 +112,3 @@ if [[ $1 == "-p" ]]; then
     fi
     git push
 fi
-common_help_panel() {
-    echo -e "On: \n\t-p és per a fer el commit al github, sinó nomes se copia."
-    echo -e "\tMISSATGE: Missatge per a incloure al commit, si no s'inclou un missatge 
-        es printarà en numero de versió actual"
-    echo -e "\t-r per a començar amb la versió igual a 1"
-    echo -e "\t-r <versió> per a posar la versió desitjada (es recomanable
-        posar-ho en el nombre de commit que ens trobem actualment)"
-    echo "───────────────────────────────────────────────────────────────────────────"
-}
-
-help_panel() {
-    echo "───────────────────────────────────────────────────────────────────────────"
-    echo "Recorda que també pots fer servir: ./clonar.sh <-p <"MISSATGE">>"
-    common_help_panel
-}
-
-help_panel2() {
-    echo "───────────────────────────────────────────────────────────────────────────"
-    echo "Recorda que l'us és: ./clonar.sh <-p <"MISSATGE">>"
-    common_help_panel
-}
-
-help_panel3() {
-    echo "───────────────────────────────────────────────────────────────────────────"
-    echo "L'us és: ./clonar.sh <-p <"MISSATGE">>"
-    common_help_panel
-}
