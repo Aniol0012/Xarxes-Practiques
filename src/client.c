@@ -225,12 +225,9 @@ void send_register_request() {
         exit(EXIT_FAIL); 
     }
 
-	// REVISAR UNSIGNED INTS
-	unsigned int retorno = 0x00; //get_type_from_str("REGISTER_REQ");
-	printf("\n%x\n",retorno);
-
 	struct Package register_request;
-	register_request.type = 0x00; // REGISTER_REQ
+	register_request.type = get_type_from_str("REGISTER_REQ"); // REGISTER_REQ 0x00
+	printf("\n%x",register_request.type);
 	strcpy(register_request.id, Id);
     strcpy(register_request.mac, MAC);
     strcpy(register_request.random_number, "10");
@@ -246,7 +243,7 @@ void send_register_request() {
     ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
 	//sleep(5);
-	printf("\nCodi de retorn del sendto: %li\n", sent); // Esta retornant -1
+	printf("\nCodi de retorn del sendto: %li\n", sent);
     
 	if (sent < 0) {
         if (debug) {
@@ -339,7 +336,7 @@ void change_state(int new_state) {
 }
 
 int get_type_from_str(char *str) {
-    for (int i = 0; ; i++) {
+    for (int i = 0; i != -1; i++) {
         char *type_str = get_pdu_type(i);
         if (strcmp(type_str, "DESCONEGUT") == 0) {
             break;
