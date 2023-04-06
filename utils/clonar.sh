@@ -61,6 +61,9 @@ echo "Tots els arxius s'han copiat correctament"
 # Després ens posicionem en la carpeta del github (Xarxes-Practica-1) per a fer el commit
 cd $github_folder_name
 
+# Copiem el git per a que el VSCode pugui fer un seguiment
+cp -r .git ..
+
 # Si passem l'argument -p fem el commit
 file_name="version.txt"
 path="utils/" # Si es vol en la ruta del mateix github, deixar en blanc
