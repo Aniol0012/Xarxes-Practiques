@@ -98,7 +98,6 @@ char *random_number();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
-int get_type_from_str(char *str);
 char *get_pdu_type(int type);
 void read_client_config(char *config_file); // read_config_file ptsr millor nom
 void print_client_info();
@@ -222,7 +221,8 @@ void send_register_request() {
 	udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
 	struct Package register_request;
-	register_request.type = get_type_from_str("REGISTER_REQ");
+	//register_request.type = get_type_from_str("REGISTER_REQ");
+	register_request.type = REGISTER_REQ;
 
 	strcpy(register_request.id, Id);
     strcpy(register_request.mac, MAC);
@@ -323,7 +323,7 @@ void concurrent_comunication() {
 			}
 
 			if (current_state == DISCONNECTED) {
-				break;
+				send_register_request();
 			}
 		}
 	}
@@ -358,7 +358,7 @@ void process_alive() {
     switch (received_package.type) {
         case ALIVE_ACK:
             if (strcmp(received_package.id, Id) == 0 && strcmp(received_package.mac, MAC) == 0) {
-                consecutive_inf_without_ack = 0; // Reset counter
+                consecutive_inf_without_ack = 0; // Posem el contador a 0
             }
             break;
         case ALIVE_NACK:
@@ -474,54 +474,40 @@ void change_state(int new_state) {
     }
 }
 
-int get_type_from_str(char *str) {
-    for (int i = 0; i != -1; i++) {
-        char *type_str = get_pdu_type(i);
-        if (strcmp(type_str, "DESCONEGUT") == 0) {
-            break;
-        }
-        if (strcmp(str, type_str) == 0) {
-            return i;
-        }
-    }
-    return -1; // Si no se encuentra el tipo en la lista, retorna -1
-}
-
-
 char *get_pdu_type(int type) {
     switch (type) {
 		// FASE DE REGISTRE
-        case 0x00: // Petició de registre
+        case REGISTER_REQ: // Petició de registre
             return "REGISTER_REQ";
-        case 0x02: // Acceptació de registre
+        case REGISTER_ACK: // Acceptació de registre
             return "REGISTER_ACK";
-        case 0x04: // Denegació de registre
+        case REGISTER_NACK: // Denegació de registre
             return "REGISTER_NACK";
-        case 0x06: // Rebuig de registre
+        case REGISTER_REJ: // Rebuig de registre
             return "REGISTER_REJ";
-		case 0x0F: // Error de protocol
+		case ERROR: // Error de protocol
 			return "ERROR";
 
 		// ESTATS D'UN EQUIP
-        case 0xA0: // Equip desconnectat
+        case DISCONNECTED: // Equip desconnectat
             return "DISCONNECTED";
-        case 0xA2: // Espera de resposta a la petició de registre
+        case WAIT_REG_RESPONSE: // Espera de resposta a la petició de registre
             return "WAIT_REG_RESPONSE";
-        case 0xA4: // Espera de consulta BB. DD. d’equips autoritzats
+        case WAIT_DB_CHECK: // Espera de consulta BB. DD. d’equips autoritzats
             return "WAIT_DB_CHECK";
-        case 0xA6: // Equip registrat, sense intercanvi ALIVE
+        case REGISTERED: // Equip registrat, sense intercanvi ALIVE
             return "REGISTERED";
-        case 0xA8: // Equip enviant i rebent paquets de ALIVE
+        case SEND_ALIVE: // Equip enviant i rebent paquets de ALIVE
             return "SEND_ALIVE";
 
 		// TIPUS DE PAQUET MANTENIMENT DE COMUNICACIÓ
-        case 0x10: // Enviament d’informació d’alive
+        case ALIVE_INF: // Enviament d’informació d’alive
             return "ALIVE_INF";
-        case 0x12: // Confirmació de recepció d’informació d’alive
+        case ALIVE_ACK: // Confirmació de recepció d’informació d’alive
             return "ALIVE_ACK";
-        case 0x14: // Denegació de recepció d’informació d’alive
+        case ALIVE_NACK: // Denegació de recepció d’informació d’alive
             return "ALIVE_NACK";
-        case 0x16: // Rebuig de recepció d’informació d’alive
+        case ALIVE_REJ: // Rebuig de recepció d’informació d’alive
             return "ALIVE_REJ";
 
 		// TIPUS PAQUET ENVIAMENT ARXIU
