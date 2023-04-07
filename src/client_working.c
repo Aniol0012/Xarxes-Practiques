@@ -11,12 +11,12 @@
 #include <netinet/in.h>
 
 #define BUFFER_SIZE 1024 // Tocar aixo
-#define T 1 // Temps màxim de resposta
+#define T 1
 #define P 2
 #define Q 3
 #define U 2
 #define N 6
-#define O 2 // Processos de registre
+#define O 2
 
 // DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
 #define DISCONNECTED 0xA0
@@ -67,15 +67,13 @@ void wait_for_ack();
 void *wait_quit(void *arg);
 int get_type_from_str(char *str);
 char *get_pdu_type(int type);
-void read_client_config(char *config_file); // read_config_file ptsr millor nom
+void read_client_config(const char *config_file); // read_config_file ptsr millor nom
 void print_client_info();
 
 // Funcions decoratives TODO
 void println(char *str);
 void print_time();
 void print_state(char *str, int current_state);
-void print_error(char *str_given);
-void aturar_programa(int EXIT_STATUS);
 void print_bar();
 
 /*
@@ -135,6 +133,12 @@ int main(int argc, char *argv[]) {
 		print_bar();
 		printf("\t\t\tMode debug activat\n");
 		print_bar();
+	}
+
+	if (config_file && debug){ // Printem el fitxer de configuració proporcionat en el paràmetre -c
+		print_time();
+		// Abans de printar aquest missatge, s'hauria de verificar que l'arxiu és correcte
+		printf("S'ha carregat l'arxiu de configuració (-c): %s\n", config_file);
 	}
 
 	// Estat inicial
@@ -262,90 +266,32 @@ void send_register_request() {
 	
 }
 
-// TESTING
-/*
-void wait_for_ack() {
-    fd_set readfds;
-    struct timeval timeout;
-    struct sockaddr_in server_addr_udp;
-    socklen_t server_addr_udp_len = sizeof(server_addr_udp);
-    int activity;
-
-    while (current_state == WAIT_REG_RESPONSE) {
-        // Inicializamos el conjunto de lectura y el temporizador
-        FD_ZERO(&readfds);
-        FD_SET(socketfd, &readfds);
-        timeout.tv_sec = 5; // Timeout de 5 segundos
-        timeout.tv_usec = 0;
-
-        // Utilizamos select() para esperar la respuesta del servidor
-        activity = select(socketfd + 1, &readfds, NULL, NULL, &timeout);
-
-        if (activity < 0) {
-            perror("Error en select()");
-            exit(EXIT_FAIL);
-        } else if (activity == 0) {
-            // Timeout: reenviamos la solicitud de registro
-            if (debug) {
-                println("No se ha recibido ACK. Reenviando solicitud de registro...");
-            }
-            send_register_request();
-        } else {
-            // Recibimos un mensaje del servidor
-            struct Package response;
-            ssize_t received = recvfrom(socketfd, &response, sizeof(response), 0, (struct sockaddr *) &server_addr_udp, &server_addr_udp_len);
-
-            if (received < 0) {
-                if (debug) {
-                    perror("Error al recibir el mensaje");
-                }
-            } else {
-                // Verificamos si es un REGISTER_ACK
-                if (response.type == get_type_from_str("REGISTER_ACK")) {
-                    if (debug) {
-                        println("ACK recibido. El cliente se ha registrado correctamente.");
-                    }
-                    change_state(REGISTERED);
-                }
-            }
-        }
-    }
-}
-*/
-
 void *wait_quit(void *arg) {
 	char input[MAX_INPUT];
 	while (1) {
         fgets(input, MAX_INPUT, stdin);
         input[strcspn(input, "\n")] = 0; // Eliminem el salt de linea
         if (strcmp(input, "quit") == 0) {
-			aturar_programa(EXIT_SUCCESS);
+            if (debug) {
+				printf("El programa s'ha aturat.\n");
+			}
+    		exit(EXIT_SUCCESS);
         }
     }
     return NULL;
 }
 
-void read_client_config(char *config_file) { // Si se passa per paràmetre un altre arxiu s'agafa aquell
+void read_client_config(const char *config_file) { // Si se passa per paràmetre un altre arxiu s'agafa aquell
     FILE *file;
     if (config_file) {
         file = fopen(config_file, "r");
     } else {
         file = fopen("client.cfg", "r");
     }
-	if (file == NULL) {
-        println("Error a l'obrir l'arxiu de configuració");
-		aturar_programa(EXIT_FAIL);
+    if (file == NULL) {
+        perror("Error a l'obrir l'arxiu de configuració");
+        exit(EXIT_FAIL);
     }
-
-	if (debug) {
-		//strcpy(config_file, "client.cfg");
-		print_time();
-		printf("DEBUG MSG.  =>  S'ha carregat l'arxiu de configuració (-c): %s\n", config_file);
-		//printf("DEBUG MSG.  =>  S'ha carregat l'arxiu de configuració (-c): ");
-
-
-		//printf("\n");
-	}
 
     char line[64];
 	while (fgets(line, sizeof(line), file) != NULL) {
@@ -371,7 +317,7 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
 }
 
 void print_client_info() {
-	println("La informació obtinguda de l'arxiu de configuració ha estat:");
+	println("La informació obtinguda de l'arxiu de configuració client.cfg ha estat:");
 	print_time();
 	printf("Id: %s\n", Id);
 	print_time();
@@ -476,11 +422,7 @@ void print_time() {
 
 void println(char *str) {
 	print_time();
-	if (debug) {
-		printf("DEBUG MSG.  =>  %s\n", str);
-	} else {
-		printf("%s\n", str);
-	}
+	printf("%s\n", str);
 }
 
 void print_state(char *str_given, int current_state){
@@ -509,20 +451,14 @@ void print_state(char *str_given, int current_state){
 			break;
 	}
 
-	print_time();
-	printf("MSG.  =>  %s: %s\n", str_given, current_state_str);
-}
-
-void print_error(char *str_given) {
-	print_time();
-	printf("ERROR.  =>  %s", str_given);
-}
-
-void aturar_programa(int EXIT_STATUS) {
-	if (debug) {
-		println("El programa s'ha aturat");
+	if (show_local_time){
+		char time_str[10];
+		get_time(time_str);
+		printf("%s MSG.  =>  %s: %s\n", time_str, str_given, current_state_str);
 	}
-    exit(EXIT_STATUS);
+	else{
+		printf("MSG.  =>  %s: %s\n", str_given, current_state_str);
+	}
 }
 
 void print_bar(){
