@@ -75,6 +75,7 @@ struct Package {
 };
 
 // VARIABLES PER A L'ENVIAMENT DE PAQUETS DEL CLIENT
+int register_attempts_left = O;
 int consecutive_inf_without_ack = 0;
 
 int udp_socket;
@@ -84,9 +85,8 @@ char buffer[BUFFER_SIZE];
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
 int open_socket(int protocol);
-void send_register_request(int udp_socket);
+void send_register_request();
 void proccess_register(int udp_socket);
-void register_with_timeouts(int udp_socket);
 void wait_for_ack();
 // FASE DE COMUNICACIÓ RECURRENT
 void concurrent_comunication();
@@ -174,11 +174,7 @@ int main(int argc, char *argv[]) {
 
 	read_client_config(config_file);
 
-	// Obrim un socket UDP
-	udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
-
-	register_with_timeouts(udp_socket);
-	//send_register_request(udp_socket);
+	send_register_request();
 
 	close(udp_socket);
 	
@@ -220,70 +216,38 @@ int open_socket(int protocol) {
     return udp_socket;
 }
 
-void send_register_request(int udp_socket) {
-    struct Package register_request;
-    //register_request.type = get_type_from_str("REGISTER_REQ");
-    register_request.type = REGISTER_REQ;
+void send_register_request() {
+	// Obrim un socket UDP
+	udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
-    strcpy(register_request.id, Id);
+	struct Package register_request;
+	//register_request.type = get_type_from_str("REGISTER_REQ");
+	register_request.type = REGISTER_REQ;
+
+	strcpy(register_request.id, Id);
     strcpy(register_request.mac, MAC);
     strcpy(register_request.random_number, random_number());
     strcpy(register_request.data, "");
 
     struct sockaddr_in server_addr_udp;
-    memset(&server_addr_udp, 0, sizeof(server_addr_udp));
+	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
     server_addr_udp.sin_port = htons(NMS_UDP_Port); // Cuidao amb el htons
     server_addr_udp.sin_addr.s_addr = inet_addr(get_local_address(NMS_Id));
 
     ssize_t sent = sendto(udp_socket, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
+	
+	//sleep(5);
 
-    if (sent < 0) {
+	if (sent < 0) {
         printd("Error a l'enviar la petició de registre");
-        exit_program(EXIT_FAIL);
+		exit_program(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
+
+	proccess_register(udp_socket);
+
 }
-
-void register_with_timeouts(int udp_socket) {
-    int t = T, p = P, q = Q, u = U, n = N, o = O;
-    int total_attempts = o * n;
-    int attempts = 0;
-    int current_interval = t;
-    int attempts_in_interval = 0;
-
-    while (attempts < total_attempts) {
-        send_register_request(udp_socket);
-        proccess_register(udp_socket);
-
-        if (current_state == REGISTERED) {
-			println("REGISTRE COMPLETAT"); // TESTING
-            return; // Registre completat, sortir de la funció
-        }
-
-        attempts++;
-        attempts_in_interval++;
-
-        if (attempts_in_interval == p) {
-            if (current_interval < q * t) {
-                current_interval += t;
-            }
-            attempts_in_interval = 0;
-        }
-
-        if (attempts % n == 0) {
-            sleep(u);
-        } else {
-            sleep(current_interval);
-        }
-    }
-
-    // No s'ha pogut contactar amb el servidor després de tots els intents
-    printd("No s'ha pogut contactar amb el servidor");
-    change_state(DISCONNECTED);
-    exit_program(EXIT_FAIL);
-}
-
 
 // GESTIÓ DEL ACK, NACK o REJECT
 void proccess_register(int udp_socket) {
@@ -299,27 +263,37 @@ void proccess_register(int udp_socket) {
 		}
 
 	}
+	sleep(2);
+
+	//printf("%i\n",received_package.type);
+	// TESTING CONCURRENT
+	change_state(REGISTERED);
+	concurrent_comunication();
 
 	switch (received_package.type) {
-        case REGISTER_ACK: // REGISTER_ACK (0x02)
-            printd("S'ha rebut un REGISTER_ACK");
-            change_state(REGISTERED);
-            break;
-        case REGISTER_NACK: // REGISTER_NACK (0x04)
-            printd("S'ha rebut un REGISTER_NACK");
-			//send_register_request(udp_socket);
-            break;
-        case REGISTER_REJ:
-            printd("S'ha rebut un REGISTER_REJ");
-            change_state(DISCONNECTED);
-            exit_program(EXIT_SUCCESS);
-            break;
-        default:
-            printd("Ha hagut un error de protocol");
-            change_state(DISCONNECTED);
-            exit_program(EXIT_SUCCESS);
-            break;
-    }
+		case REGISTER_ACK: // REGISTER_ACK (0x02)
+			printd("S'ha rebut un REGISTER_ACK");
+			change_state(REGISTERED);
+			concurrent_comunication();
+		case REGISTER_NACK: // REGISTER_NACK (0x04)
+			printd("S'ha rebut un REGISTER_NACK");
+			if (register_attempts_left > 0) {
+				printd("Fem un altre request"); // Eliminar
+				send_register_request();
+				register_attempts_left--;
+			} else {
+				printd("No queden més intents de registre");
+			}
+		case REGISTER_REJ:
+			printd("S'ha rebut un REGISTER_REJ");
+			change_state(DISCONNECTED);
+			exit_program(EXIT_SUCCESS);
+		default:
+			printd("Ha hagut un error de protocol");
+			change_state(DISCONNECTED);
+			exit_program(EXIT_SUCCESS);
+			
+	}
 }
 
 // TRACTAMENT DE COMUNICACIÓ PERIÒDICA AMB EL SERVIDOR
@@ -330,8 +304,8 @@ void concurrent_comunication() {
 
 		fd_set read_fds;
 		struct timeval timeout;
-		timeout.tv_sec = R; // R Segons
-		timeout.tv_usec = 0; // Microsegons
+		timeout.tv_sec = R;
+		timeout.tv_usec = 0;
 
 		FD_ZERO(&read_fds);
 		FD_SET(udp_socket, &read_fds);
@@ -343,12 +317,12 @@ void concurrent_comunication() {
 			consecutive_inf_without_ack++;
 			if (consecutive_inf_without_ack >= U_2) {
 				change_state(DISCONNECTED);
-				send_register_request(udp_socket);
+				send_register_request();
 			}
 		}
 
 		if (current_state == DISCONNECTED) {
-			send_register_request(udp_socket);
+			send_register_request();
 		}
 	}
 }
@@ -390,7 +364,7 @@ void process_alive() {
             break;
         case ALIVE_REJ:
             change_state(DISCONNECTED);
-            send_register_request(udp_socket);
+            send_register_request();
             break;
     }
 }
