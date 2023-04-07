@@ -64,6 +64,7 @@ char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
 void send_register_request();
 void wait_for_ack();
+char *random_number();
 
 // DEFINIM LES VARIABLES AUXILIARS
 void *wait_quit(void *arg);
@@ -228,14 +229,14 @@ void send_register_request() {
 
 	strcpy(register_request.id, Id);
     strcpy(register_request.mac, MAC);
-    strcpy(register_request.random_number, "10");
+    strcpy(register_request.random_number, random_number());
     strcpy(register_request.data, "");
 
 
     struct sockaddr_in server_addr_udp;
 	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
-    server_addr_udp.sin_port = htons(NMS_UDP_Port); 
+    server_addr_udp.sin_port = htons(NMS_UDP_Port); // Cuidao amb el htons
     server_addr_udp.sin_addr.s_addr = inet_addr("127.0.0.1"); // NMS_Id
 
     ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
@@ -324,6 +325,26 @@ void *wait_quit(void *arg) {
         }
     }
     return NULL;
+}
+
+// Retorna una cadena de caràcters de tamany maxim 7 bytes
+char *random_number() {
+    srand(time(NULL));
+
+    int length = rand() % 7 + 1;
+
+    // Reservem memòria per a la cadena i el caràcter nul final
+    char *number = (char *)malloc(length + 1);
+
+    // Generem cada dígit aleatoriament i l'afegim a la cadena
+    for (int i = 0; i < length; i++) {
+        number[i] = '0' + rand() % 10;
+    }
+
+    // Afegim el caràcter nul al final de la cadena
+    number[length] = '\0';
+
+    return number;
 }
 
 void read_client_config(char *config_file) { // Si se passa per paràmetre un altre arxiu s'agafa aquell
