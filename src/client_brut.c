@@ -11,10 +11,8 @@
 #include <netinet/in.h>
 
 #define BUFFER_SIZE 1024 // Tocar aixo
-
-// TEMPORITZADORS (EN SEGONS)
 #define T 1 // Temps màxim de resposta
-#define P 2 // Numero de paquets
+#define P 2
 #define Q 3
 #define U 2
 #define N 6
@@ -56,9 +54,6 @@ struct Package {
 };
 //#pragma pack(pop)
 
-// VARIABLES PER AL REGISTRE DEL CLIENT
-int register_attempts_left = O;
-
 char* client_ip = "127.0.0.1";
 
 int socketfd;
@@ -68,7 +63,6 @@ char buffer[BUFFER_SIZE];
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
 void send_register_request();
-void proccess_register(int socketfd);
 void wait_for_ack();
 char *random_number();
 
@@ -84,7 +78,7 @@ void println(char *str);
 void print_time();
 void print_state(char *str, int current_state);
 void print_error(char *str_given);
-void exit_program(int EXIT_STATUS);
+void aturar_programa(int EXIT_STATUS);
 void print_bar();
 
 /*
@@ -135,7 +129,7 @@ int main(int argc, char *argv[]) {
 		}
 		else{
 			fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>]\n", argv[0]);
-			exit_program(EXIT_SUCCESS); // És una sortida controlada del programa
+			aturar_programa(EXIT_SUCCESS); // És una sortida controlada del programa
 		}
 	}
 
@@ -148,9 +142,51 @@ int main(int argc, char *argv[]) {
 	// Estat inicial
 	print_state("Equip passa a l'estat", current_state);
 
+	//sleep(1);
 	read_client_config(config_file);
+	// printf("Estat 0x09: %s\n", get_pdu_type(9)); // Te retorna ERROR
+	// Fer-ho servir per al debug
 
 	send_register_request();
+
+	// while(sleep(WAIT_rEG_RESPONSE_SEGONS)) // S'hauria d'afegir per anar intentant-ho
+
+	// Connexio TCP
+	/*
+	if (connect(socketfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+		change_state(WAIT_REG_RESPONSE);
+		if (debug) {
+			perror("No s'ha pogut conectar amb el servidor");
+		}
+		change_state(DISCONNECTED);
+		close(socketfd);
+		//exit(EXIT_FAIL);
+	} else {
+		change_state(REGISTERED);
+	}
+	*/
+
+	// Comunicació amb el servidor basada en les especificacions.
+	/*
+	send_message(socketfd, "START");
+	receive_message(socketfd, buffer, BUFFER_SIZE);
+	if (debug) {
+		printf("Server response: %s\n", buffer);
+	}
+	*/
+
+	// Afegim la petició de registre
+	/*
+    char register_request[64];
+    if (debug) {
+    sprintf(register_request, "0x00 %s %s", NMS_Id, MAC);
+    send_message(socketfd, register_request);
+    receive_message(socketfd, buffer, BUFFER_SIZE);
+        printf("Server response: %s\n", buffer);
+    }
+	*/
+
+	// Aquí es podrien afegir més interaccions amb el servidor si fos necessari.
 
 	close(socketfd);
 	
@@ -170,7 +206,7 @@ void send_register_request() {
 		if (debug) {
 			println("Ha sorgit un error al crear el socket");
 		}
-		exit_program(EXIT_FAIL);
+		aturar_programa(EXIT_FAIL);
 	}
 
 	// Fem el binding
@@ -185,7 +221,7 @@ void send_register_request() {
 		if (debug) {
             println("Error al fer el binding");
         }
-        exit_program(EXIT_FAIL);
+        aturar_programa(EXIT_FAIL);
     }
 
 	struct Package register_request;
@@ -211,58 +247,81 @@ void send_register_request() {
         if (debug) {
         	println("Error a l'enviar la petició de registre");
         }
-		exit_program(EXIT_FAIL);
+		aturar_programa(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
 
-	proccess_register(socketfd);
+	// GESTIÓ DEL ACK O NACK
+	
+	while(current_state==WAIT_REG_RESPONSE) {
+		println("HOLA");
+		sleep(1);
+	}
 
+	sleep(5);
+	/*
+	if (strncmp(buffer, "0x02", 4) == 0) { // REGISTER_ACK
+		change_state(REGISTERED);
+	} else if (strncmp(buffer, "0x04", 4) == 0 || strncmp(buffer, "0x06", 4) == 0) { // REGISTER_NACK || REGISTER_REJ
+		change_state(DISCONNECTED);
+	} else {
+		change_state(DISCONNECTED); // Millorar
+		// Gestiona altres casos o errors
+	}
+	*/
+	
 }
 
-// GESTIÓ DEL ACK, NACK o REJECT
-void proccess_register(int socketfd) {
-		struct sockaddr_in sender_addr;
-		socklen_t sender_addr_len = sizeof(sender_addr);
-		struct Package received_package;
+// TESTING
+/*
+void wait_for_ack() {
+    fd_set readfds;
+    struct timeval timeout;
+    struct sockaddr_in server_addr_udp;
+    socklen_t server_addr_udp_len = sizeof(server_addr_udp);
+    int activity;
 
-		ssize_t received = recvfrom(socketfd, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
+    while (current_state == WAIT_REG_RESPONSE) {
+        // Inicializamos el conjunto de lectura y el temporizador
+        FD_ZERO(&readfds);
+        FD_SET(socketfd, &readfds);
+        timeout.tv_sec = 5; // Timeout de 5 segundos
+        timeout.tv_usec = 0;
 
-		if (received < 0) {
-			if (debug) {
-				print_error("Error al rebre el paquet");
-			}
+        // Utilizamos select() para esperar la respuesta del servidor
+        activity = select(socketfd + 1, &readfds, NULL, NULL, &timeout);
 
-		}
-		sleep(2);
+        if (activity < 0) {
+            perror("Error en select()");
+            exit(EXIT_FAIL);
+        } else if (activity == 0) {
+            // Timeout: reenviamos la solicitud de registro
+            if (debug) {
+                println("No se ha recibido ACK. Reenviando solicitud de registro...");
+            }
+            send_register_request();
+        } else {
+            // Recibimos un mensaje del servidor
+            struct Package response;
+            ssize_t received = recvfrom(socketfd, &response, sizeof(response), 0, (struct sockaddr *) &server_addr_udp, &server_addr_udp_len);
 
-		printf("%i\n",received_package.type);
-
-		switch (received_package.type) {
-			case 0x02: // REGISTER_ACK
-				change_state(REGISTERED);
-			case 0x04: // REGISTER_NACK
-				println("Hola");
-				register_attempts_left--;
-				if (register_attempts_left < 0) {
-					println("Hem fet un try");
-					send_register_request();
-				}
-				if (debug) {
-					println("S'ha rebut un REGISTER_NACK");
-				}
-				// SEGUIR AMB EL MATEIX ESTAT (S'HA DE TRUCAR A LA FUNCIÓ send_register_request)
-			case 0x06: // REGISTER_REJ
-				if (debug) {
-					println("S'ha rebut un REGISTER_REJ");
-				}
-				change_state(DISCONNECTED);
-				exit_program(EXIT_SUCCESS);
-				
-		}
-		if (received_package.type == 0x02) { // REGISTER_ACK
-			change_state(REGISTERED);
-		}
+            if (received < 0) {
+                if (debug) {
+                    perror("Error al recibir el mensaje");
+                }
+            } else {
+                // Verificamos si es un REGISTER_ACK
+                if (response.type == get_type_from_str("REGISTER_ACK")) {
+                    if (debug) {
+                        println("ACK recibido. El cliente se ha registrado correctamente.");
+                    }
+                    change_state(REGISTERED);
+                }
+            }
+        }
+    }
 }
+*/
 
 void *wait_quit(void *arg) {
 	char input[MAX_INPUT];
@@ -270,7 +329,7 @@ void *wait_quit(void *arg) {
         fgets(input, MAX_INPUT, stdin);
         input[strcspn(input, "\n")] = 0; // Eliminem el salt de linea
         if (strcmp(input, "quit") == 0) {
-			exit_program(EXIT_SUCCESS);
+			aturar_programa(EXIT_SUCCESS);
         }
     }
     return NULL;
@@ -306,7 +365,7 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
 
 	if (file == NULL) {
         println("Error al carregar l'arxiu de configuració");
-		exit_program(EXIT_FAIL);
+		aturar_programa(EXIT_FAIL);
     }
 
 	if (debug) {
@@ -484,7 +543,7 @@ void print_error(char *str_given) {
 	printf("ERROR.  =>  %s", str_given);
 }
 
-void exit_program(int EXIT_STATUS) {
+void aturar_programa(int EXIT_STATUS) {
 	if (debug) {
 		println("El programa s'ha aturat");
 	}
