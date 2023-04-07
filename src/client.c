@@ -21,19 +21,29 @@
 #define O 2 // Processos de registre
 
 // DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
-#define DISCONNECTED 0xA0
-#define WAIT_REG_RESPONSE 0xA2
-#define WAIT_DB_CHECK 0xA4
-#define REGISTERED 0xA6
-#define SEND_ALIVE 0xA8
+#define DISCONNECTED 0xA0 // Equip desconnectat
+#define WAIT_REG_RESPONSE 0xA2 // Espera de resposta a la petició de registre
+#define WAIT_DB_CHECK 0xA4 // Espera de consulta BB. DD. d’equips autoritzats
+#define REGISTERED 0xA6 // Equip registrat, sense intercanvi ALIVE
+#define SEND_ALIVE 0xA8 // Equip enviant i rebent paquets de ALIVE
+
+// TIPUS DE PAQUET FASE DE REGISTRE
+#define REGISTER_REQ 0x00 // Petició de resgistre
+#define REGISTER_ACK 0x02 // Acceptació de registre
+#define REGISTER_NACK 0x04 // Denegació de registre
+#define REGISTER_REJ 0x06 // Rebuig de registre
+#define ERROR 0x0F // Error de protocol
 
 // DEFINIM VARIABLES PER A STRINGS
 #define MAX_INPUT 20
 
-// BOOLEANS D'INICI
+// ESTATS INICIALS
 int current_state = DISCONNECTED;
-bool show_local_time = true;
 bool debug = false;
+
+// CONFIGURACIÓ ADICIONAL (S'HA D'ACTIVAR MANUALMENT)
+bool show_local_time = true;
+bool show_client_info = false; // Mostra la informació rebuda per l'arxiu de configuració
 bool show_exit_status = false;
 
 // DEFINIM VARIABLES DE SORTIDA
@@ -46,7 +56,7 @@ char *MAC = NULL;
 char *NMS_Id = NULL;
 int NMS_UDP_Port = 0;
 
-//#pragma pack(push, 1)
+// ESTRUCTURA D'UN PAQUET (EN BYTES)
 struct Package {
 	unsigned char type;
     char id[7];
@@ -54,7 +64,6 @@ struct Package {
     char random_number[7];
     char data[50];
 };
-//#pragma pack(pop)
 
 // VARIABLES PER AL REGISTRE DEL CLIENT
 int register_attempts_left = O;
@@ -70,6 +79,7 @@ void change_state(int new_state);
 void send_register_request();
 void proccess_register(int socketfd);
 void wait_for_ack();
+char *get_ip_address(char *str);
 char *random_number();
 
 // DEFINIM LES VARIABLES AUXILIARS
@@ -201,7 +211,7 @@ void send_register_request() {
 	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
     server_addr_udp.sin_port = htons(NMS_UDP_Port); // Cuidao amb el htons
-    server_addr_udp.sin_addr.s_addr = inet_addr("127.0.0.1"); // NMS_Id
+    server_addr_udp.sin_addr.s_addr = inet_addr(get_ip_address(NMS_Id)); // NMS_Id (127.0.0.1)
 
     ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
@@ -221,47 +231,49 @@ void send_register_request() {
 
 // GESTIÓ DEL ACK, NACK o REJECT
 void proccess_register(int socketfd) {
-		struct sockaddr_in sender_addr;
-		socklen_t sender_addr_len = sizeof(sender_addr);
-		struct Package received_package;
+	struct sockaddr_in sender_addr;
+	socklen_t sender_addr_len = sizeof(sender_addr);
+	struct Package received_package;
 
-		ssize_t received = recvfrom(socketfd, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
+	ssize_t received = recvfrom(socketfd, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
 
-		if (received < 0) {
-			if (debug) {
-				print_error("Error al rebre el paquet");
-			}
-
+	if (received < 0) {
+		if (debug) {
+			print_error("Error al rebre el paquet");
 		}
-		sleep(2);
 
-		printf("%i\n",received_package.type);
+	}
+	sleep(2);
 
-		switch (received_package.type) {
-			case 0x02: // REGISTER_ACK
-				change_state(REGISTERED);
-			case 0x04: // REGISTER_NACK
-				println("Hola");
-				register_attempts_left--;
-				if (register_attempts_left < 0) {
-					println("Hem fet un try");
-					send_register_request();
-				}
-				if (debug) {
-					println("S'ha rebut un REGISTER_NACK");
-				}
-				// SEGUIR AMB EL MATEIX ESTAT (S'HA DE TRUCAR A LA FUNCIÓ send_register_request)
-			case 0x06: // REGISTER_REJ
-				if (debug) {
-					println("S'ha rebut un REGISTER_REJ");
-				}
-				change_state(DISCONNECTED);
-				exit_program(EXIT_SUCCESS);
-				
-		}
-		if (received_package.type == 0x02) { // REGISTER_ACK
+	printf("%i\n",received_package.type);
+
+	switch (received_package.type) {
+		case 0x02: // REGISTER_ACK (0x02)
 			change_state(REGISTERED);
-		}
+		case 0x04: // REGISTER_NACK (0x04)
+			println("Hola");
+			if (register_attempts_left > 0) {
+				println("Hem fet un try");
+				send_register_request();
+				register_attempts_left--;
+			} else if (debug) {
+				println("No queden més intents de registre");
+			}
+			if (debug) {
+				println("S'ha rebut un REGISTER_NACK");
+			}
+			// SEGUIR AMB EL MATEIX ESTAT (S'HA DE TRUCAR A LA FUNCIÓ send_register_request)
+		case REGISTER_REJ:
+			if (debug) {
+				println("S'ha rebut un REGISTER_REJ");
+			}
+		change_state(DISCONNECTED);
+		exit_program(EXIT_SUCCESS);
+			
+	}
+	if (received_package.type == 0x02) { // REGISTER_ACK
+		change_state(REGISTERED);
+	}
 }
 
 void *wait_quit(void *arg) {
@@ -300,18 +312,20 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
     FILE *file;
     if (config_file) {
         file = fopen(config_file, "r");
+		if (debug) {
+			println("S'ha carregat l'arxiu de configuració");
+		}
     } else {
         file = fopen("client.cfg", "r");
+		if (debug) {
+			println("S'ha carregat l'arxiu de configuració per defecte");
+		}
     }
 
 	if (file == NULL) {
         println("Error al carregar l'arxiu de configuració");
 		exit_program(EXIT_FAIL);
     }
-
-	if (debug) {
-		println("S'ha carregat l'arxiu de configuració");
-	}
 
     char line[64];
 	while (fgets(line, sizeof(line), file) != NULL) {
@@ -331,9 +345,18 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
 
     fclose(file);
 
-	if (debug) {;
+	if (show_client_info) {;
 		print_client_info();
 	}
+}
+
+// FUNCIÓ QUE RETORNA LA IP DEL LOCALHOST EN CAS QUE SIGUI LA QUE S'HA LLEGIT, SINÓ ES RETORNA LA ORGINAL
+char *get_ip_address(char *str) {
+    if (NMS_Id && strcmp(NMS_Id, "localhost") == 0) {
+        return "127.0.0.1";
+    } else {
+        return str;
+    }
 }
 
 void print_client_info() {
