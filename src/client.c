@@ -68,14 +68,15 @@ struct Package {
 // VARIABLES PER AL REGISTRE DEL CLIENT
 int register_attempts_left = O;
 
-int socketfd;
+int udp_socket;
 struct sockaddr_in server_addr;
 char buffer[BUFFER_SIZE];
 
 char *strdup(const char *); // Inicialitzem strdup per a poder usarla
 void change_state(int new_state);
+int open_socket(int protocol);
 void send_register_request();
-void proccess_register(int socketfd);
+void proccess_register(int udp_socket);
 void wait_for_ack();
 char *get_local_address(char *str);
 char *random_number();
@@ -88,16 +89,17 @@ void read_client_config(char *config_file); // read_config_file ptsr millor nom
 void print_client_info();
 
 // Funcions decoratives TODO
-void println(char *str);
-void print_time();
-void print_state(char *str, int current_state);
-void print_error(char *str_given);
+void println(char *str); 
+void print_time(); // Printar l'hora actual
+void print_state(char *str, int current_state); // Printar canvis d'estat
+void print_error(char *str_given); // Printar errors
+void printd(char *str_given); // Printar debugs
 void exit_program(int EXIT_STATUS);
 void print_bar();
 
 /*
-void send_message(int socketfd, const char *message) {
-	ssize_t sent = send(socketfd, message, strlen(message), 0);
+void send_message(int udp_socket, const char *message) {
+	ssize_t sent = send(udp_socket, message, strlen(message), 0);
 	if (sent < 0){
 		if (debug) {
 			perror("Error sending message");
@@ -108,8 +110,8 @@ void send_message(int socketfd, const char *message) {
 */
 
 
-ssize_t receive_message(int socketfd, char *buffer, size_t size) {
-	ssize_t received = recv(socketfd, buffer, size - 1, 0);
+ssize_t receive_message(int udp_socket, char *buffer, size_t size) {
+	ssize_t received = recv(udp_socket, buffer, size - 1, 0);
 	if (received < 0){
 		if (debug) {
 			perror("Error receiving message");
@@ -147,7 +149,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if (debug){
+	if (debug) {
 		print_bar();
 		printf("\t\t\tMode debug activat\n");
 		print_bar();
@@ -160,7 +162,7 @@ int main(int argc, char *argv[]) {
 
 	send_register_request();
 
-	close(socketfd);
+	close(udp_socket);
 	
 	/* S'hauria d'usar quan ja no se vulguin més
 	free(NMS_Id);
@@ -179,12 +181,10 @@ int open_socket(int protocol) {
         socket_type = SOCK_STREAM; // Protocol TCP
     }
 
-    int socketfd = socket(AF_INET, socket_type, protocol);
+    int udp_socket = socket(AF_INET, socket_type, protocol);
 
-    if (socketfd < 0) {
-        if (debug) {
-			println("Ha sorgit un error al crear el socket");
-		}
+    if (udp_socket < 0) {
+		printd("Ha sorgit un error al crear el socket");
         exit_program(EXIT_FAIL);
     }
 
@@ -194,46 +194,18 @@ int open_socket(int protocol) {
     local_addr.sin_port = htons(0); // 0 permet que el sistema escolleixi un port disponible
     local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
-        if (debug) {
-            println("Error al fer el binding");
-        }
+    if (bind(udp_socket, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
+        printd("Error al fer el binding");
         exit_program(EXIT_FAIL);
     }
 
-    return socketfd;
+    return udp_socket;
 }
 
 void send_register_request() {
 	// Obrim un socket UDP
-	socketfd = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
-	// Cambiar socketfd per udp_socket
+	udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
-	printf("El descriptor del socket és: %i\n",socketfd);
-
-/*
-	if (socketfd < 0){
-		if (debug) {
-			println("Ha sorgit un error al crear el socket");
-		}
-		exit_program(EXIT_FAIL);
-	}
-
-	// Fem el binding
-	struct sockaddr_in local_addr;
-    memset(&local_addr, 0, sizeof(local_addr));
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = htons(0); // 0 permite que el sistema elija un puerto disponible
-    //local_addr.sin_addr.s_addr = inet_addr(client_ip); // htonl(INADDR_ANY);
-    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {        
-		if (debug) {
-            println("Error al fer el binding");
-        }
-        exit_program(EXIT_FAIL);
-    }
-*/
 	struct Package register_request;
 	register_request.type = get_type_from_str("REGISTER_REQ");
 
@@ -242,38 +214,33 @@ void send_register_request() {
     strcpy(register_request.random_number, random_number());
     strcpy(register_request.data, "");
 
-
     struct sockaddr_in server_addr_udp;
 	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
     server_addr_udp.sin_port = htons(NMS_UDP_Port); // Cuidao amb el htons
     server_addr_udp.sin_addr.s_addr = inet_addr(get_local_address(NMS_Id));
 
-    ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
+    ssize_t sent = sendto(udp_socket, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
 	//sleep(5);
 
 	if (sent < 0) {
-        if (debug) {
-        	println("Error a l'enviar la petició de registre");
-        }
+        printd("Error a l'enviar la petició de registre");
 		exit_program(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
 
-	change_state(REGISTERED);
-
-	proccess_register(socketfd);
+	proccess_register(udp_socket);
 
 }
 
 // GESTIÓ DEL ACK, NACK o REJECT
-void proccess_register(int socketfd) {
+void proccess_register(int udp_socket) {
 	struct sockaddr_in sender_addr;
 	socklen_t sender_addr_len = sizeof(sender_addr);
 	struct Package received_package;
 
-	ssize_t received = recvfrom(socketfd, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
+	ssize_t received = recvfrom(udp_socket, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
 
 	if (received < 0) {
 		if (debug) {
@@ -289,24 +256,23 @@ void proccess_register(int socketfd) {
 		case 0x02: // REGISTER_ACK (0x02)
 			change_state(REGISTERED);
 		case 0x04: // REGISTER_NACK (0x04)
-			println("Hola");
+			printd("S'ha rebut un REGISTER_NACK");
 			if (register_attempts_left > 0) {
-				println("Hem fet un try");
+				printd("Fem un altre request");
 				send_register_request();
 				register_attempts_left--;
-			} else if (debug) {
-				println("No queden més intents de registre");
-			}
-			if (debug) {
-				println("S'ha rebut un REGISTER_NACK");
+			} else {
+				printd("No queden més intents de registre");
 			}
 			// SEGUIR AMB EL MATEIX ESTAT (S'HA DE TRUCAR A LA FUNCIÓ send_register_request)
 		case REGISTER_REJ:
-			if (debug) {
-				println("S'ha rebut un REGISTER_REJ");
-			}
-		change_state(DISCONNECTED);
-		exit_program(EXIT_SUCCESS);
+			printd("S'ha rebut un REGISTER_REJ");
+			change_state(DISCONNECTED);
+			exit_program(EXIT_SUCCESS);
+		default:
+			printd("Ha hagut un error de protocol");
+			change_state(DISCONNECTED);
+			exit_program(EXIT_SUCCESS);
 			
 	}
 	if (received_package.type == 0x02) { // REGISTER_ACK
@@ -350,14 +316,10 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
     FILE *file;
     if (config_file) {
         file = fopen(config_file, "r");
-		if (debug) {
-			println("S'ha carregat l'arxiu de configuració");
-		}
+		printd("S'ha carregat l'arxiu de configuració");
     } else {
         file = fopen("client.cfg", "r");
-		if (debug) {
-			println("S'ha carregat l'arxiu de configuració per defecte");
-		}
+		printd("S'ha carregat l'arxiu de configuració per defecte");
     }
 
 	if (file == NULL) {
@@ -398,7 +360,7 @@ char *get_local_address(char *str) {
 }
 
 void print_client_info() {
-	println("La informació obtinguda de l'arxiu de configuració ha estat:");
+	printd("La informació obtinguda de l'arxiu de configuració ha estat:");
 	print_time();
 	printf("Id: %s\n", Id);
 	print_time();
@@ -501,14 +463,6 @@ void print_time() {
 	}
 }
 
-void println(char *str) {
-	print_time();
-	if (debug) {
-		printf("DEBUG MSG.  =>  %s\n", str);
-	} else {
-		printf("%s\n", str);
-	}
-}
 
 void print_state(char *str_given, int current_state){
 	char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
@@ -540,15 +494,25 @@ void print_state(char *str_given, int current_state){
 	printf("MSG.  =>  %s: %s\n", str_given, current_state_str);
 }
 
+void println(char *str) {
+	print_time();
+	printf("%s\n", str);
+}
+
 void print_error(char *str_given) {
 	print_time();
 	printf("ERROR.  =>  %s", str_given);
 }
 
-void exit_program(int EXIT_STATUS) {
+void printd(char *str_given) {
 	if (debug) {
-		println("El programa s'ha aturat");
+		print_time();
+		printf("DEBUG MSG.  =>  %s\n", str_given);
 	}
+}
+
+void exit_program(int EXIT_STATUS) {
+	printd("El programa s'ha aturat");
 	if (show_exit_status) {
 		print_time();
 		printf("DEBUG MSG.  =>  El codi d'acabament ha estat: %i\n", EXIT_STATUS);
