@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <signal.h> //Not used
+#include <sys/select.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -14,11 +15,13 @@
 
 // TEMPORITZADORS (EN SEGONS)
 #define T 1 // Temps màxim de resposta
-#define P 2 // Numero de paquets
+#define P 2 // Número de paquets
 #define Q 3
 #define U 2
 #define N 6
 #define O 2 // Processos de registre
+#define R 2 // Envia ALIVE_INF cada R segons
+#define U_2 3 // Número máxim de paquets ALIVE_INF sense rebre ALIVE_ACK
 
 // DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
 #define DISCONNECTED 0xA0 // Equip desconnectat
@@ -33,6 +36,12 @@
 #define REGISTER_NACK 0x04 // Denegació de registre
 #define REGISTER_REJ 0x06 // Rebuig de registre
 #define ERROR 0x0F // Error de protocol
+
+// TIPUS DE PAQUET MANTENIMENT DE COMUNICACIÓ
+#define ALIVE_INF 0x10
+#define ALIVE_ACK 0x12
+#define ALIVE_NACK 0x14
+#define ALIVE_REJ 0x16
 
 // DEFINIM VARIABLES PER A STRINGS
 #define MAX_INPUT 20
@@ -65,8 +74,9 @@ struct Package {
     char data[50];
 };
 
-// VARIABLES PER AL REGISTRE DEL CLIENT
+// VARIABLES PER A L'ENVIAMENT DE PAQUETS DEL CLIENT
 int register_attempts_left = O;
+int consecutive_inf_without_ack = 0;
 
 int udp_socket;
 struct sockaddr_in server_addr;
@@ -78,6 +88,11 @@ int open_socket(int protocol);
 void send_register_request();
 void proccess_register(int udp_socket);
 void wait_for_ack();
+// FASE DE COMUNICACIÓ RECURRENT
+void concurrent_comunication();
+void send_alive_inf();
+void process_alive();
+// FI DE FASE DE COMUNICACIÓ RECURRENT
 char *get_local_address(char *str);
 char *random_number();
 
@@ -250,21 +265,25 @@ void proccess_register(int udp_socket) {
 	}
 	sleep(2);
 
-	printf("%i\n",received_package.type);
+	//printf("%i\n",received_package.type);
+	// TESTING CONCURRENT
+	change_state(REGISTERED);
+	concurrent_comunication();
 
 	switch (received_package.type) {
-		case 0x02: // REGISTER_ACK (0x02)
+		case REGISTER_ACK: // REGISTER_ACK (0x02)
+			printd("S'ha rebut un REGISTER_ACK");
 			change_state(REGISTERED);
-		case 0x04: // REGISTER_NACK (0x04)
+			concurrent_comunication();
+		case REGISTER_NACK: // REGISTER_NACK (0x04)
 			printd("S'ha rebut un REGISTER_NACK");
 			if (register_attempts_left > 0) {
-				printd("Fem un altre request");
+				printd("Fem un altre request"); // Eliminar
 				send_register_request();
 				register_attempts_left--;
 			} else {
 				printd("No queden més intents de registre");
 			}
-			// SEGUIR AMB EL MATEIX ESTAT (S'HA DE TRUCAR A LA FUNCIÓ send_register_request)
 		case REGISTER_REJ:
 			printd("S'ha rebut un REGISTER_REJ");
 			change_state(DISCONNECTED);
@@ -275,10 +294,87 @@ void proccess_register(int udp_socket) {
 			exit_program(EXIT_SUCCESS);
 			
 	}
-	if (received_package.type == 0x02) { // REGISTER_ACK
-		change_state(REGISTERED);
+}
+
+// TRACTAMENT DE COMUNICACIÓ PERIÒDICA AMB EL SERVIDOR
+void concurrent_comunication() {
+	if (current_state == REGISTERED) {
+		while (true) { // while (current_state == REGISTERED) ??
+			send_alive_inf();
+			change_state(SEND_ALIVE);
+
+			fd_set read_fds;
+			struct timeval timeout;
+			timeout.tv_sec = R;
+			timeout.tv_usec = 0;
+
+			FD_ZERO(&read_fds);
+			FD_SET(udp_socket, &read_fds);
+
+			int activity = select(udp_socket + 1, &read_fds, NULL, NULL, &timeout);
+			if (activity > 0) {
+				process_alive();
+			} else if (activity == 0) {
+				consecutive_inf_without_ack++;
+				if (consecutive_inf_without_ack >= U_2) {
+					change_state(DISCONNECTED);
+					send_register_request();
+				}
+			}
+
+			if (current_state == DISCONNECTED) {
+				break;
+			}
+		}
 	}
 }
+
+void send_alive_inf() {
+    struct Package alive_inf;
+    alive_inf.type = ALIVE_INF;
+    strcpy(alive_inf.id, Id);
+    strcpy(alive_inf.mac, MAC);
+    strcpy(alive_inf.random_number, random_number());
+    strcpy(alive_inf.data, "");
+
+    ssize_t alive_sent = sendto(udp_socket, &alive_inf, sizeof(alive_inf), 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
+    if (alive_sent < 0) {
+        printd("Error l'enviar ALIVE_INF");
+    }
+}
+
+void process_alive() {
+    struct sockaddr_in sender_addr;
+    socklen_t sender_addr_len = sizeof(sender_addr);
+    struct Package received_package;
+
+    ssize_t received = recvfrom(udp_socket, &received_package, sizeof(received_package), 0, (struct sockaddr *) &sender_addr, &sender_addr_len);
+    if (received < 0) {
+        if (debug) {
+            print_error("Error al rebre el paquet");
+        }
+    }
+
+    switch (received_package.type) {
+        case ALIVE_ACK:
+            if (strcmp(received_package.id, Id) == 0 && strcmp(received_package.mac, MAC) == 0) {
+                consecutive_inf_without_ack = 0; // Reset counter
+            }
+            break;
+        case ALIVE_NACK:
+            // No es fa res ja que es considera com no haver rebut resposta del servidor
+            break;
+        case ALIVE_REJ:
+            change_state(DISCONNECTED);
+            send_register_request();
+            break;
+    }
+}
+
+// FI DE TRACTAMENT DE COMUNCIACIÓ PERIÒDICA ABM EL SERVIDOR
+
+
+
 
 void *wait_quit(void *arg) {
 	char input[MAX_INPUT];
@@ -501,6 +597,9 @@ void println(char *str) {
 
 void print_error(char *str_given) {
 	print_time();
+	if (debug) {
+		printf("(DEBUG): ERROR.  =>  %s", str_given);
+	}
 	printf("ERROR.  =>  %s", str_given);
 }
 
