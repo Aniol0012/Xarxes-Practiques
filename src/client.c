@@ -68,8 +68,6 @@ struct Package {
 // VARIABLES PER AL REGISTRE DEL CLIENT
 int register_attempts_left = O;
 
-char* client_ip = "127.0.0.1";
-
 int socketfd;
 struct sockaddr_in server_addr;
 char buffer[BUFFER_SIZE];
@@ -79,7 +77,7 @@ void change_state(int new_state);
 void send_register_request();
 void proccess_register(int socketfd);
 void wait_for_ack();
-char *get_ip_address(char *str);
+char *get_local_address(char *str);
 char *random_number();
 
 // DEFINIM LES VARIABLES AUXILIARS
@@ -172,10 +170,48 @@ int main(int argc, char *argv[]) {
 	return 0;
 }
 
+int open_socket(int protocol) {
+    int socket_type;
+
+    if (protocol == IPPROTO_UDP) {
+        socket_type = SOCK_DGRAM; // Protocol UDP
+    } else {
+        socket_type = SOCK_STREAM; // Protocol TCP
+    }
+
+    int socketfd = socket(AF_INET, socket_type, protocol);
+
+    if (socketfd < 0) {
+        if (debug) {
+			println("Ha sorgit un error al crear el socket");
+		}
+        exit_program(EXIT_FAIL);
+    }
+
+    struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = htons(0); // 0 permet que el sistema escolleixi un port disponible
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    if (bind(socketfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0) {
+        if (debug) {
+            println("Error al fer el binding");
+        }
+        exit_program(EXIT_FAIL);
+    }
+
+    return socketfd;
+}
+
 void send_register_request() {
 	// Obrim un socket UDP
-	socketfd = socket(AF_INET, SOCK_DGRAM, 0); // SOCK_DGRAM (UDP) || SOCK_STREAM (TCP)
+	socketfd = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
+	// Cambiar socketfd per udp_socket
 
+	printf("El descriptor del socket és: %i\n",socketfd);
+
+/*
 	if (socketfd < 0){
 		if (debug) {
 			println("Ha sorgit un error al crear el socket");
@@ -197,7 +233,7 @@ void send_register_request() {
         }
         exit_program(EXIT_FAIL);
     }
-
+*/
 	struct Package register_request;
 	register_request.type = get_type_from_str("REGISTER_REQ");
 
@@ -211,7 +247,7 @@ void send_register_request() {
 	memset(&server_addr_udp, 0, sizeof(server_addr_udp));
     server_addr_udp.sin_family = AF_INET;
     server_addr_udp.sin_port = htons(NMS_UDP_Port); // Cuidao amb el htons
-    server_addr_udp.sin_addr.s_addr = inet_addr(get_ip_address(NMS_Id)); // NMS_Id (127.0.0.1)
+    server_addr_udp.sin_addr.s_addr = inet_addr(get_local_address(NMS_Id));
 
     ssize_t sent = sendto(socketfd, &register_request, sizeof(register_request), 0, (struct sockaddr *) &server_addr_udp, sizeof(server_addr_udp));
 	
@@ -224,6 +260,8 @@ void send_register_request() {
 		exit_program(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
+
+	change_state(REGISTERED);
 
 	proccess_register(socketfd);
 
@@ -351,7 +389,7 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
 }
 
 // FUNCIÓ QUE RETORNA LA IP DEL LOCALHOST EN CAS QUE SIGUI LA QUE S'HA LLEGIT, SINÓ ES RETORNA LA ORGINAL
-char *get_ip_address(char *str) {
+char *get_local_address(char *str) {
     if (NMS_Id && strcmp(NMS_Id, "localhost") == 0) {
         return "127.0.0.1";
     } else {
