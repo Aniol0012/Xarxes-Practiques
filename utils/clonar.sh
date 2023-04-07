@@ -62,8 +62,8 @@ echo "Tots els arxius s'han copiat correctament"
 cd $github_folder_name
 
 # Copiem el git per a que el VSCode pugui fer un seguiment: 
-chmod -R u+rw .git
-cp -r .git ../.git #> /dev/null 2>&1
+#chmod -R u+rw .git
+#cp -r .git ../.git #> /dev/null 2>&1
 
 # Si passem l'argument -p fem el commit
 file_name="version.txt"
