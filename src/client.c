@@ -298,33 +298,31 @@ void proccess_register(int udp_socket) {
 
 // TRACTAMENT DE COMUNICACIÓ PERIÒDICA AMB EL SERVIDOR
 void concurrent_comunication() {
-	if (current_state == REGISTERED) {
-		while (true) { // while (current_state == REGISTERED) ??
-			send_alive_inf();
-			change_state(SEND_ALIVE);
+	while (current_state == REGISTERED || current_state == SEND_ALIVE) {
+		send_alive_inf();
+		change_state(SEND_ALIVE);
 
-			fd_set read_fds;
-			struct timeval timeout;
-			timeout.tv_sec = R;
-			timeout.tv_usec = 0;
+		fd_set read_fds;
+		struct timeval timeout;
+		timeout.tv_sec = R;
+		timeout.tv_usec = 0;
 
-			FD_ZERO(&read_fds);
-			FD_SET(udp_socket, &read_fds);
+		FD_ZERO(&read_fds);
+		FD_SET(udp_socket, &read_fds);
 
-			int activity = select(udp_socket + 1, &read_fds, NULL, NULL, &timeout);
-			if (activity > 0) {
-				process_alive();
-			} else if (activity == 0) {
-				consecutive_inf_without_ack++;
-				if (consecutive_inf_without_ack >= U_2) {
-					change_state(DISCONNECTED);
-					send_register_request();
-				}
-			}
-
-			if (current_state == DISCONNECTED) {
+		int activity = select(udp_socket + 1, &read_fds, NULL, NULL, &timeout);
+		if (activity > 0) {
+			process_alive();
+		} else if (activity == 0) {
+			consecutive_inf_without_ack++;
+			if (consecutive_inf_without_ack >= U_2) {
+				change_state(DISCONNECTED);
 				send_register_request();
 			}
+		}
+
+		if (current_state == DISCONNECTED) {
+			send_register_request();
 		}
 	}
 }
