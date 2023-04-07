@@ -28,9 +28,11 @@
 // DEFINIM VARIABLES PER A STRINGS
 #define MAX_INPUT 20
 
+// BOOLEANS D'INICI
 int current_state = DISCONNECTED;
 bool show_local_time = true;
 bool debug = false;
+bool show_exit_status = false;
 
 // DEFINIM VARIABLES DE SORTIDA
 #define EXIT_SUCCESS 0
@@ -112,7 +114,6 @@ int main(int argc, char *argv[]) {
 	pthread_t wait_quit_thread; // Creem el fil per a l'espera de la comanda
 	pthread_create(&wait_quit_thread, NULL, wait_quit, NULL); // Iniciem el fil concurrent
 
-
 	for (int i = 1; i < argc; i++){
 		if (strcmp(argv[i], "-d") == 0){
 			debug = true;
@@ -127,7 +128,7 @@ int main(int argc, char *argv[]) {
 		}
 		else{
 			fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>]\n", argv[0]);
-			exit(EXIT_FAIL);
+			aturar_programa(EXIT_SUCCESS); // És una sortida controlada del programa
 		}
 	}
 
@@ -190,10 +191,10 @@ int main(int argc, char *argv[]) {
 	
 	/* S'hauria d'usar quan ja no se vulguin més
 	free(NMS_Id);
-	return 0;
     free(MAC);
 	*/
 	pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
+	return 0;
 }
 
 void send_register_request() {
@@ -204,7 +205,7 @@ void send_register_request() {
 		if (debug) {
 			println("Ha sorgit un error al crear el socket");
 		}
-		exit(EXIT_FAIL);
+		aturar_programa(EXIT_FAIL);
 	}
 
 	// Fem el binding
@@ -219,12 +220,12 @@ void send_register_request() {
 		if (debug) {
             println("Error al fer el binding");
         }
-        exit(EXIT_FAIL); 
+        aturar_programa(EXIT_FAIL);
     }
 
 	struct Package register_request;
-	register_request.type = get_type_from_str("REGISTER_REQ"); // REGISTER_REQ 0x00
-	printf("\n%x",register_request.type);
+	register_request.type = get_type_from_str("REGISTER_REQ");
+
 	strcpy(register_request.id, Id);
     strcpy(register_request.mac, MAC);
     strcpy(register_request.random_number, "10");
@@ -245,7 +246,7 @@ void send_register_request() {
         if (debug) {
         	println("Error a l'enviar la petició de registre");
         }
-		exit(EXIT_FAIL);
+		aturar_programa(EXIT_FAIL);
     }
     change_state(WAIT_REG_RESPONSE);
 
@@ -332,19 +333,14 @@ void read_client_config(char *config_file) { // Si se passa per paràmetre un al
     } else {
         file = fopen("client.cfg", "r");
     }
+
 	if (file == NULL) {
-        println("Error a l'obrir l'arxiu de configuració");
+        println("Error al carregar l'arxiu de configuració");
 		aturar_programa(EXIT_FAIL);
     }
 
 	if (debug) {
-		//strcpy(config_file, "client.cfg");
-		print_time();
-		printf("DEBUG MSG.  =>  S'ha carregat l'arxiu de configuració (-c): %s\n", config_file);
-		//printf("DEBUG MSG.  =>  S'ha carregat l'arxiu de configuració (-c): ");
-
-
-		//printf("\n");
+		println("S'ha carregat l'arxiu de configuració");
 	}
 
     char line[64];
@@ -521,6 +517,10 @@ void print_error(char *str_given) {
 void aturar_programa(int EXIT_STATUS) {
 	if (debug) {
 		println("El programa s'ha aturat");
+	}
+	if (show_exit_status) {
+		print_time();
+		printf("DEBUG MSG.  =>  El codi d'acabament ha estat: %i\n", EXIT_STATUS);
 	}
     exit(EXIT_STATUS);
 }
