@@ -6,6 +6,8 @@
     # git pull
     # git clone
     # git rev-list --count HEAD # Retorna el numero actual de commit (s'hauria d'incrementar)
+    # Veure en quin branch estem
+    # Pushear en diferents branches
 
 common_help_panel() {
     echo -e "On: \n\t-p és per a fer el commit al github, sinó nomes se copia."
