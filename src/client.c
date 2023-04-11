@@ -50,6 +50,13 @@ struct udp_PDU{
   char data [50];
 };
 
+// DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
+#define DISCONNECTED 0xA0 // Equip desconnectat
+#define WAIT_REG_RESPONSE 0xA2 // Espera de resposta a la petició de registre
+#define WAIT_DB_CHECK 0xA4 // Espera de consulta BB. DD. d’equips autoritzats
+#define REGISTERED 0xA6 // Equip registrat, sense intercanvi ALIVE
+#define SEND_ALIVE 0xA8 // Equip enviant i rebent paquets de ALIVE
+
 // TIPUS DE PAQUET FASE DE REGISTRE
 #define REGISTER_REQ 0x00  // Petició de resgistre
 #define REGISTER_ACK 0x02  // Acceptació de registre
@@ -132,6 +139,7 @@ void println(char *str);
 void exit_program(int EXIT_STATUS);
 void printd(char *str_given); // Printar debugs
 void print_bar();
+void print_state(int current_state);
 void print_time(); // Printar l'hora actual
 void get_time(char *time_str);
 
@@ -237,9 +245,8 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
 
             if (strcmp(current_state, "DISCONNECTED") == 0) {
                 set_current_state("WAIT_REG_RESPONSE");
-                if (!debug_mode) {
-                    print_msg("ESTAT: WAIT_REG_RESPONSE");
-                }
+                print_state(WAIT_REG_RESPONSE);
+                
                 debug("Passat a l'estat WAIT_REG_RESPONSE");
             }
 
@@ -388,8 +395,7 @@ void set_periodic_comunication()
     if (strcmp(current_state, "REGISTERED") == 0)
     {
         set_current_state("DISCONNECTED");
-        if (!debug_mode)
-            print_msg("ESTAT: DISCONNECTED");
+        print_state(DISCONNECTED);
         debug("NO s'ha rebut resposta");
         debug("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
         subscribe(params.config, params.udp_addr_server, params.addr_client);
@@ -418,8 +424,7 @@ int treat_UDP_packet()
         sprintf(buff, "El client ha estat rebutjat. Motiu: %s", params.data->data);
         print_msg(buff);
         set_current_state("DISCONNECTED");
-        if (!debug_mode)
-            print_msg("ESTAT: DISCONNECTED");
+        print_state(DISCONNECTED);
         debug("Client passa a l'estat : DISCONNECTED.");
         exit(-1);
         return 0;
@@ -443,8 +448,7 @@ int treat_UDP_packet()
         {
             debug("Rebut REGISTER_ACK, client passa a l'estat REGISTERED");
             set_current_state("REGISTERED");
-            if (!debug_mode)
-                print_msg("ESTAT: REGISTERED");
+            print_state(REGISTERED);
             params.config->TCPport = atoi(params.data->data);
             strcpy(params.config->random, params.data->random);
             strcpy(server_data.random, params.data->random);
@@ -466,8 +470,7 @@ int treat_UDP_packet()
         if (equals != 0 && correct == 1)
         { /* Primer ack rebut */
             set_current_state("ALIVE");
-            if (!debug_mode)
-                print_msg("ESTAT: ALIVE");
+            print_state(SEND_ALIVE);
             debug("Rebut ALIVE_ACK correcte, client passa a l'estat ALIVE");
         }
         else if (equals == 0 && correct == 1)
@@ -487,8 +490,7 @@ int treat_UDP_packet()
         if (equals == 0)
         {
             set_current_state("DISCONNECTED");
-            if (!debug_mode)
-                print_msg("ESTAT: DISCONNECTED");
+            print_state(DISCONNECTED);
             debug("Rebut ALIVE_REJ, possible suplantació d'identitat. Client pasa a estat DISCONNECTED");
             debug("Reiniciant proces subscripció");
             subscribe(params.config, params.udp_addr_server, params.addr_client);
@@ -532,10 +534,8 @@ void get_network_file_size(char *str_size)
 void read_commands()
 {
     char command[9]; /* les comandes son màxim 9 caracters */
-    while (1)
+    while (true)
     {
-        if (!debug_mode)
-            printf("=> "); /* Per evitar barrejes amb els misatges debug */
         scanf("%9s", command);
         treat_command(command);
     }
@@ -646,12 +646,48 @@ void print_time() {
 	}
 }
 
+void println(char *str) {
+	print_time();
+	printf("MSG.  =>  %s\n", str);
+}
+
 void printd(char *str_given) {
 	if (debug_activated) {
 		print_time();
 		printf("DEBUG MSG.  =>  %s\n", str_given);
 	}
 }
+
+void print_state(int current_state) {
+	char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
+
+	// Creem un diccionari per a cada estat
+	switch (current_state){
+		case WAIT_REG_RESPONSE:
+			strcpy(current_state_str, "WAIT_REG_RESPONSE");
+			break;
+
+		case WAIT_DB_CHECK:
+			strcpy(current_state_str, "WAIT_DB_CHECK");
+			break;
+
+		case REGISTERED:
+			strcpy(current_state_str, "REGISTERED");
+			break;
+
+		case SEND_ALIVE:
+			strcpy(current_state_str, "SEND_ALIVE");
+			break;
+
+		default:
+			strcpy(current_state_str, "DISCONNECTED");
+			break;
+	}
+
+	print_time();
+	printf("MSG.  =>  Equip passa a l'estat: %s\n", current_state_str);
+}
+
 
 void exit_program(int EXIT_STATUS) {
 	printd("El programa s'ha aturat");
