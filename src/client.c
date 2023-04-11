@@ -20,8 +20,8 @@
 #define DISCONNECTED 0xA0 // Equip desconnectat
 #define WAIT_REG_RESPONSE 0xA2 // Espera de resposta a la petició de registre
 #define WAIT_DB_CHECK 0xA4 // Espera de consulta BB. DD. d’equips autoritzats
-#define REGISTERED 0xA6 // Equip registrat, sense intercanvi ALIVE
-#define SEND_ALIVE 0xA8 // Equip enviant i rebent paquets de ALIVE
+#define REGISTERED 0xA6 // Equip registrat, sense intercanvi SEND_ALIVE
+#define SEND_ALIVE 0xA8 // Equip enviant i rebent paquets de SEND_ALIVE
 
 // TIPUS DE PAQUET FASE DE REGISTRE
 #define REGISTER_REQ 0x00  // Petició de resgistre
@@ -74,7 +74,7 @@ struct client_config{
   int TCP_port;
 };
 
-/*Estructura per a guardar dades per a comprovar als ALIVE */
+/*Estructura per a guardar dades per a comprovar als SEND_ALIVE */
 struct server_data{
   char name[7];
   char MAC[13];
@@ -236,11 +236,11 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
     crea_UDP(&reg_pdu, config, REGISTER_REQ);
 
     /* Inici proces subscripció */
-    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state); tries++) {
+    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state); tries++) {
         int packet_counter = 0, interval = T, t = T;
         int p = P, q = Q, n = N, u = U;
         
-        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state)) {
+        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state)) {
             sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *)&udp_addr_server, sizeof(udp_addr_server));
             packet_counter++;
             printd("Enviat paquet REGISTER_REQ");
@@ -302,7 +302,7 @@ void send_alive()
     crea_UDP(&alive_pdu, parameters.config, ALIVE_INF);
     while (1)
     {
-        while (strcmp(current_state, "ALIVE") == 0)
+        while (strcmp(current_state, "SEND_ALIVE") == 0)
         {
             temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *)&parameters.udp_addr_server, sizeof(parameters.udp_addr_server));
             printd("Enviat paquet ALIVE_INF");
@@ -326,7 +326,7 @@ void send_alive()
                     {
                         set_current_state("DISCONNECTED");
                         println("ESTAT: DISCONNECTED");
-                        printd("No s'ha rebut tres paquets de confirmació d'ALIVE consecutius correctes.");
+                        printd("No s'ha rebut tres paquets de confirmació d'SEND_ALIVE consecutius correctes.");
                         printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
                         break;
                     }
@@ -343,7 +343,7 @@ void send_alive()
                 { /*Comprova que no s'ha rebut 3 paquets seguits de confirmació d'ALive*/
                     set_current_state("DISCONNECTED");
                     println("ESTAT: DISCONNECTED");
-                    printd("No s'ha rebut confirmació de tres paquets de rebuda de paquets ALIVE consecutius.");
+                    printd("No s'ha rebut confirmació de tres paquets de rebuda de paquets SEND_ALIVE consecutius.");
                     printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
                     break;
                 }
@@ -383,7 +383,7 @@ void set_periodic_comunication()
             printd(buff);
             memset(buff, '\0', sizeof(buff)); /*Per evitar stack smashing */
             treat_UDP_packet();
-            if (strcmp(current_state, "ALIVE") == 0 || u == 3)
+            if (strcmp(current_state, "SEND_ALIVE") == 0 || u == 3)
             {
                 break;
             }
@@ -402,7 +402,7 @@ void set_periodic_comunication()
         printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
         send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
     }
-    else if (strcmp(current_state, "ALIVE") == 0 && pthread_created == 0)
+    else if (strcmp(current_state, "SEND_ALIVE") == 0 && pthread_created == 0)
     {
         pthread_created = 1;
         printd("Creat procés per mantenir comunicació periodica amb el servidor");
@@ -431,7 +431,7 @@ int treat_UDP_packet()
         exit_program(EXIT_FAIL);
         return 0;
     case REGISTER_NACK:
-        if (strcmp("ALIVE", current_state) == 0)
+        if (strcmp("SEND_ALIVE", current_state) == 0)
         { /* El desestimem perque ja estem registrats */
             break;
         }
@@ -464,19 +464,19 @@ int treat_UDP_packet()
         }
         return 0;
     case ALIVE_ACK:
-        equals = strcmp(current_state, "ALIVE");
+        equals = strcmp(current_state, "SEND_ALIVE");
         if (strcmp(parameters.data->random, server_data.random) == 0 && strcmp(parameters.data->name, server_data.name) == 0 && strcmp(parameters.data->mac, server_data.MAC) == 0)
         {
             correct = 1;
         }
         if (equals != 0 && correct == 1)
         { /* Primer ack rebut */
-            set_current_state("ALIVE");
+            set_current_state("SEND_ALIVE");
             print_state(SEND_ALIVE);
-            printd("Rebut ALIVE_ACK correcte, client passa a l'estat ALIVE");
+            printd("Rebut ALIVE_ACK correcte, client passa a l'estat SEND_ALIVE");
         }
         else if (equals == 0 && correct == 1)
-        { /* Ja tenim estat ALIVE*/
+        { /* Ja tenim estat SEND_ALIVE*/
             printd("Rebut ALIVE_ACK");
         }
         else
@@ -488,7 +488,7 @@ int treat_UDP_packet()
     case ALIVE_NACK: /*No els tenim en compte, no caldria ficar-los */
         return 0;
     case ALIVE_REJ:
-        equals = strcmp(current_state, "ALIVE");
+        equals = strcmp(current_state, "SEND_ALIVE");
         if (equals == 0)
         {
             set_current_state("DISCONNECTED");
