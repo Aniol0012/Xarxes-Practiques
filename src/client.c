@@ -104,12 +104,15 @@ bool show_client_info = false; // Mostra la informació rebuda per l'arxiu de co
 bool show_exit_status = false;
 bool debug_activated = false;
 
+#define MAX_STATUS_LENGTH 18 // WAIT_REG_RESPONSE = 17 + '\0'
+#define MAX_FILENAME_LENGTH 12 // 'client2.cfg = 11 + '\0'
+
 /* Variables globals */
 bool debug_mode = false;
 int udp_socket;
-char software_config_file[20] = "client.cfg";
-char network_config_file[20] = "boot.cfg"; // El -f crec q no sha de fer
-char current_state[30] = "DISCONNECTED";
+char software_config_file[MAX_FILENAME_LENGTH] = "client.cfg";
+char network_config_file[MAX_FILENAME_LENGTH] = "boot.cfg"; // El -f crec q no sha de fer
+char current_state[MAX_STATUS_LENGTH] = "DISCONNECTED";
 int tcp_sock = 0, counter;
 int pthread_created = 0;
 struct parameters params;
@@ -190,7 +193,7 @@ void read_software_config_file(struct client_config *config)
     if (conf == NULL)
     {
         fprintf(stderr, "Error obrir arxiu");
-        exit(-1);
+        exit_program(EXIT_FAIL);
     }
 
     fscanf(conf, "%s", word);
@@ -276,7 +279,7 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
 
     if (tries == max_tries && correct == 0) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
         println("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
-        exit(-1);
+        exit_program(EXIT_FAIL);
     }
 
     sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
@@ -424,7 +427,7 @@ int treat_UDP_packet()
         set_current_state("DISCONNECTED");
         print_state(DISCONNECTED);
         printd("Client passa a l'estat : DISCONNECTED.");
-        exit(-1);
+        exit_program(EXIT_FAIL);
         return 0;
     case REGISTER_NACK:
         if (strcmp("ALIVE", current_state) == 0)
@@ -439,7 +442,7 @@ int treat_UDP_packet()
             return 0;
         }
         printd("Superat màxim d'intents. Tancant client.");
-        exit(-1);
+        exit_program(EXIT_FAIL);
     case REGISTER_ACK:
         equals = strcmp(current_state, "REGISTERED");
         if (equals != 0)
@@ -521,13 +524,15 @@ void get_network_file_size(char *str_size)
     if (f == NULL)
     {
         fprintf(stderr, "Error obrir arxiu");
-        exit(-1);
+        exit_program(EXIT_FAIL);
     }
     fseek(f, 0L, SEEK_END);
     size = ftell(f);
     sprintf(str_size, "%d", size);
     fclose(f);
 }
+
+// Aixo s'ha de tocar si o si
 
 void read_commands()
 {
@@ -546,7 +551,7 @@ void treat_command(char command[])
         pthread_cancel(alive_thread);
         close(udp_socket);
         printd("Finalitzats sockets");
-        exit(1);
+        exit_program(EXIT_FAIL);
     }
     else
     {
@@ -569,6 +574,9 @@ void parse_parameters(int argc, char **argv)
                 {
                 case 'd':
                     debug_mode = true;
+                    print_bar();
+		            printf("\t\t\tMode debug activat\n");
+		            print_bar();
                     break;
                 case 'c':
                     strcpy(software_config_file, argv[i + 1]);
@@ -578,7 +586,7 @@ void parse_parameters(int argc, char **argv)
                     break;
                 default:
                     fprintf(stderr, "Wrong parameters Input \n");
-                    exit(-1);
+                    exit_program(EXIT_FAIL);
                 }
             }
         }
@@ -636,7 +644,7 @@ void printd(char *str_given) {
 }
 
 void print_state(int current_state) {
-	char current_state_str[strlen("WAIT_REG_RESPONSE") + 1];
+	char current_state_str[MAX_STATUS_LENGTH];
 
 	// Creem un diccionari per a cada estat
 	switch (current_state){
