@@ -116,6 +116,6 @@ if [[ $1 == "-p" ]]; then
     else
        git commit -m "v$new_version - $commit"
     fi
-    #git push
-    git push -u origin 2023_v2
+    git push
+    #git push -u origin 2023_v2
 fi
