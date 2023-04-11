@@ -120,12 +120,10 @@ pthread_t alive_thread;
 void parse_parameters(int argc, char **argv);
 int open_socket(int protocol);
 void read_software_config_file(struct client_config *config);
-void debug(char msg[]);
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
 void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client);
 void crea_UDP(struct udp_PDU *pdu, struct client_config *config, unsigned char petition);
 void set_current_state(char _current_state[]);
-void print_msg(char msg[]);
 void set_periodic_comunication();
 int treat_UDP_packet();
 void send_alive();
@@ -153,7 +151,7 @@ int main(int argc, char **argv)
     strcpy(config.random, "000000");
     config.random[6] = '\0';
 
-    debug("S'ha llegit l'arxiu de configuració");
+    printd("S'ha llegit l'arxiu de configuració");
 
     printf("La configuració llegida és la següent: \n \t Name: %s \n \t MAC: %s \n \t Server: %s \n \t Port: %i \n",
            config.name, config.MAC, config.server, config.UDPport);
@@ -241,13 +239,13 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
         while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state)) {
             sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *)&udp_addr_server, sizeof(udp_addr_server));
             packet_counter++;
-            debug("Enviat paquet REGISTER_REQ");
+            printd("Enviat paquet REGISTER_REQ");
 
             if (strcmp(current_state, "DISCONNECTED") == 0) {
                 set_current_state("WAIT_REG_RESPONSE");
                 print_state(WAIT_REG_RESPONSE);
                 
-                debug("Passat a l'estat WAIT_REG_RESPONSE");
+                printd("Passat a l'estat WAIT_REG_RESPONSE");
             }
 
             n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *)&udp_addr_server, &fromlen);
@@ -271,18 +269,18 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
             break;
 
         if (tries < max_tries - 1) {
-            debug("Reiniciant procès subscripció");
+            printd("Reiniciant procès subscripció");
             sleep(u);
         }
     } /* Fi while d'enviar paquets */
 
     if (tries == max_tries && correct == 0) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
-        print_msg("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
+        println("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
         exit(-1);
     }
 
     sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
-    debug(buff);
+    printd(buff);
     params.data = &data;
     treat_UDP_packet();
 }
@@ -303,7 +301,7 @@ void send_alive()
         while (strcmp(current_state, "ALIVE") == 0)
         {
             temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *)&params.udp_addr_server, sizeof(params.udp_addr_server));
-            debug("Enviat paquet ALIVE_INF");
+            printd("Enviat paquet ALIVE_INF");
             if (temp == -1)
             {
                 printf("Error sendTo \n");
@@ -315,7 +313,7 @@ void send_alive()
                 i = 0;
                 params.data = &data;
                 sprintf(buff, "Rebut: bytes= %lu, type:%i, nom=%s, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.name, data.mac, data.random, data.data);
-                debug(buff);
+                printd(buff);
                 packet_current_state = treat_UDP_packet();
                 if (packet_current_state == -1)
                 { /*Significa que es un paquet incorrecte */
@@ -323,9 +321,9 @@ void send_alive()
                     if (incorrecte == u)
                     {
                         set_current_state("DISCONNECTED");
-                        print_msg("ESTAT: DISCONNECTED");
-                        debug("No s'ha rebut tres paquets de confirmació d'ALIVE consecutius correctes.");
-                        debug("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
+                        println("ESTAT: DISCONNECTED");
+                        printd("No s'ha rebut tres paquets de confirmació d'ALIVE consecutius correctes.");
+                        printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
                         break;
                     }
                 }
@@ -340,9 +338,9 @@ void send_alive()
                 if (i == u)
                 { /*Comprova que no s'ha rebut 3 paquets seguits de confirmació d'ALive*/
                     set_current_state("DISCONNECTED");
-                    print_msg("ESTAT: DISCONNECTED");
-                    debug("No s'ha rebut confirmació de tres paquets de rebuda de paquets ALIVE consecutius.");
-                    debug("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
+                    println("ESTAT: DISCONNECTED");
+                    printd("No s'ha rebut confirmació de tres paquets de rebuda de paquets ALIVE consecutius.");
+                    printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
                     break;
                 }
             }
@@ -366,7 +364,7 @@ void set_periodic_comunication()
     while (1 && u != 3)
     {
         temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *)&params.udp_addr_server, sizeof(params.udp_addr_server));
-        debug("Enviat paquet ALIVE_INF");
+        printd("Enviat paquet ALIVE_INF");
         if (temp == -1)
         {
             printf("Error sendTo \n");
@@ -378,7 +376,7 @@ void set_periodic_comunication()
             params.data = &data;
             u = 0;
             sprintf(buff, "Rebut: bytes= %lu, type:%i, nom=%s, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.name, data.mac, data.random, data.data);
-            debug(buff);
+            printd(buff);
             memset(buff, '\0', sizeof(buff)); /*Per evitar stack smashing */
             treat_UDP_packet();
             if (strcmp(current_state, "ALIVE") == 0 || u == 3)
@@ -396,14 +394,14 @@ void set_periodic_comunication()
     {
         set_current_state("DISCONNECTED");
         print_state(DISCONNECTED);
-        debug("NO s'ha rebut resposta");
-        debug("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
+        printd("NO s'ha rebut resposta");
+        printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
         subscribe(params.config, params.udp_addr_server, params.addr_client);
     }
     else if (strcmp(current_state, "ALIVE") == 0 && pthread_created == 0)
     {
         pthread_created = 1;
-        debug("Creat procés per mantenir comunicació periodica amb el servidor");
+        printd("Creat procés per mantenir comunicació periodica amb el servidor");
         pthread_create(&alive_thread, NULL, (void *(*)(void *))send_alive, NULL);
     }
 }
@@ -422,10 +420,10 @@ int treat_UDP_packet()
     {
     case REGISTER_REJ:
         sprintf(buff, "El client ha estat rebutjat. Motiu: %s", params.data->data);
-        print_msg(buff);
+        println(buff);
         set_current_state("DISCONNECTED");
         print_state(DISCONNECTED);
-        debug("Client passa a l'estat : DISCONNECTED.");
+        printd("Client passa a l'estat : DISCONNECTED.");
         exit(-1);
         return 0;
     case REGISTER_NACK:
@@ -435,18 +433,18 @@ int treat_UDP_packet()
         }
         if (counter < 3)
         {
-            debug("Rebut REGISTER_NACK, reiniciant procès subscripció");
+            printd("Rebut REGISTER_NACK, reiniciant procès subscripció");
             subscribe(params.config, params.udp_addr_server, params.addr_client);
             counter++;
             return 0;
         }
-        debug("Superat màxim d'intents. Tancant client.");
+        printd("Superat màxim d'intents. Tancant client.");
         exit(-1);
     case REGISTER_ACK:
         equals = strcmp(current_state, "REGISTERED");
         if (equals != 0)
         {
-            debug("Rebut REGISTER_ACK, client passa a l'estat REGISTERED");
+            printd("Rebut REGISTER_ACK, client passa a l'estat REGISTERED");
             set_current_state("REGISTERED");
             print_state(REGISTERED);
             params.config->TCPport = atoi(params.data->data);
@@ -458,7 +456,7 @@ int treat_UDP_packet()
         }
         else
         {
-            debug("Rebut REGISTER_ACK");
+            printd("Rebut REGISTER_ACK");
         }
         return 0;
     case ALIVE_ACK:
@@ -471,15 +469,15 @@ int treat_UDP_packet()
         { /* Primer ack rebut */
             set_current_state("ALIVE");
             print_state(SEND_ALIVE);
-            debug("Rebut ALIVE_ACK correcte, client passa a l'estat ALIVE");
+            printd("Rebut ALIVE_ACK correcte, client passa a l'estat ALIVE");
         }
         else if (equals == 0 && correct == 1)
         { /* Ja tenim estat ALIVE*/
-            debug("Rebut ALIVE_ACK");
+            printd("Rebut ALIVE_ACK");
         }
         else
         {
-            debug("Rebut ALIVE_ACK incorrecte");
+            printd("Rebut ALIVE_ACK incorrecte");
             return -1;
         }
         return 0;
@@ -491,8 +489,8 @@ int treat_UDP_packet()
         {
             set_current_state("DISCONNECTED");
             print_state(DISCONNECTED);
-            debug("Rebut ALIVE_REJ, possible suplantació d'identitat. Client pasa a estat DISCONNECTED");
-            debug("Reiniciant proces subscripció");
+            printd("Rebut ALIVE_REJ, possible suplantació d'identitat. Client pasa a estat DISCONNECTED");
+            printd("Reiniciant proces subscripció");
             subscribe(params.config, params.udp_addr_server, params.addr_client);
         }
         return 0;
@@ -547,12 +545,12 @@ void treat_command(char command[])
     {
         pthread_cancel(alive_thread);
         close(udp_socket);
-        debug("Finalitzats sockets");
+        printd("Finalitzats sockets");
         exit(1);
     }
     else
     {
-        print_msg("Wrong command");
+        println("Wrong command");
     }
 }
 
@@ -585,7 +583,7 @@ void parse_parameters(int argc, char **argv)
             }
         }
     }
-    debug("S'ha seleccionat l'opció debug");
+    printd("S'ha seleccionat l'opció printd");
 }
 
 int open_socket(int protocol) {
@@ -604,32 +602,11 @@ int open_socket(int protocol) {
 		printd("Ha sorgit un error al crear el socket");
         exit_program(EXIT_FAIL);
     }
-    debug("S'ha obert el socket");
+    printd("S'ha obert el socket");
     return socket_created;
 }
 
 ///////////////////////////////// FUNCIONS PER PRINTAR /////////////////////////////////
-
-void debug(char msg[])
-{
-    if (debug_mode)
-    {
-        time_t _time = time(0);
-        struct tm *tlocal = localtime(&_time);
-        char output[128];
-        strftime(output, 128, "%H:%M:%S", tlocal);
-        printf("%s: DEBUG -> %s \n", output, msg);
-    }
-}
-
-void print_msg(char msg[])
-{
-    time_t _time = time(0);
-    struct tm *tlocal = localtime(&_time);
-    char output[128];
-    strftime(output, 128, "%H:%M:%S", tlocal);
-    printf("%s: MSG -> %s \n", output, msg);
-}
 
 void get_time(char *time_str){
 	time_t t = time(NULL);
