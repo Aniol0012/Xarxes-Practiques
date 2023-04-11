@@ -35,7 +35,7 @@ struct server_data{
 /* Estructura per a pasar les structs de config a treatPacket() */
 struct parameters{
   struct client_config *config;
-  struct sockaddr_in addr_cli;
+  struct sockaddr_in addr_client;
   struct sockaddr_in udp_addr_server;
   struct sockaddr_in tcp_addr_server;
   struct udp_PDU *data;
@@ -115,7 +115,7 @@ int open_socket(int protocol);
 void read_software_config_file(struct client_config *config);
 void debug(char msg[]);
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
-void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_cli);
+void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client);
 void crea_UDP(struct udp_PDU *pdu, struct client_config *config, unsigned char petition);
 void set_current_state(char _current_state[]);
 void print_msg(char msg[]);
@@ -137,7 +137,7 @@ void get_time(char *time_str);
 
 int main(int argc, char **argv)
 {
-    struct sockaddr_in udp_addr_server, addr_cli;
+    struct sockaddr_in udp_addr_server, addr_client;
     struct client_config config;
 
     parse_parameters(argc, argv);
@@ -151,10 +151,10 @@ int main(int argc, char **argv)
            config.name, config.MAC, config.server, config.UDPport);
 
     /* Adreça del bind del client */
-    memset(&addr_cli, 0, sizeof(struct sockaddr_in));
-    addr_cli.sin_family = AF_INET;
-    addr_cli.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_cli.sin_port = htons(config.UDPport);
+    memset(&addr_client, 0, sizeof(struct sockaddr_in));
+    addr_client.sin_family = AF_INET;
+    addr_client.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_client.sin_port = htons(config.UDPport);
 
     /* Adreça del servidor */
     memset(&udp_addr_server, 0, sizeof(udp_addr_server));
@@ -164,13 +164,13 @@ int main(int argc, char **argv)
 
     /* Per a poder tractar els paquets més facilment més endavant */
     params.config = &config;
-    params.addr_cli = addr_cli;
+    params.addr_client = addr_client;
     params.udp_addr_server = udp_addr_server;
 
     // Obrim un socket UDP
 	udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
-    subscribe(&config, addr_cli, udp_addr_server);
+    subscribe(&config, addr_client, udp_addr_server);
     read_commands();
     pthread_join(alive_thread, NULL);
     return 1;
@@ -197,6 +197,7 @@ void read_software_config_file(struct client_config *config)
 
     fscanf(conf, "%s", word);
     fscanf(conf, "%s", word);
+    // Tractar en una funció
     if (strcmp(word, "localhost") == 0)
     {
         strcpy(config->server, "127.0.0.1");
@@ -212,9 +213,8 @@ void read_software_config_file(struct client_config *config)
     fclose(conf);
 }
 
-void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_cli)
-{
-    int tries, max = 4, i, n_bytes;
+void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client) {
+    int tries, max_tries = 2, n_bytes;
     int correct = 0; /*variable per saber si s'ha aconseguit correctament el registre */
     struct udp_PDU data;
     struct udp_PDU reg_pdu;
@@ -226,76 +226,49 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
     crea_UDP(&reg_pdu, config, REGISTER_REQ);
 
     /* Inici proces subscripció */
-    for (tries = 0; tries < 3 && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state); tries++)
-    {
-        int packet_counter = 0, interval = 2, t = 2, temp = 0;
-        for (i = 0; i < 3; i++)
-        {
-            temp = sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *)&udp_addr_server, sizeof(udp_addr_server));
-            /*
-            if (temp == -1)
-            {
-                printf("Error sendTo \n");
-            }
-            */
+    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state); tries++) {
+        int packet_counter = 0, interval = T, t = T;
+        int p = P, q = Q, n = N, u = U;
+        
+        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state)) {
+            sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *)&udp_addr_server, sizeof(udp_addr_server));
             packet_counter++;
             debug("Enviat paquet REGISTER_REQ");
-            if (strcmp(current_state, "DISCONNECTED") == 0)
-            {
-                set_current_state("WAIT_REG");
+
+            if (strcmp(current_state, "DISCONNECTED") == 0) {
+                set_current_state("WAIT_REG_RESPONSE");
                 if (debug_flag == 0)
-                    print_msg("ESTAT: WAIT_REG");
-                debug("Passat a l'estat WAIT_REG");
+                    print_msg("ESTAT: WAIT_REG_RESPONSE");
+                debug("Passat a l'estat WAIT_REG_RESPONSE");
             }
+
             n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *)&udp_addr_server, &fromlen);
-            if (n_bytes > 0)
+            if (n_bytes > 0) {
+                correct = 1;
                 break;
+            }
+
+            if (packet_counter <= p) {
+                t = interval;
+            } else if (packet_counter > p && t < (q * T)) {
+                t += interval;
+            } else {
+                t = q * T;
+            }
+
             sleep(t);
         }
-        while (1 && strcmp("REGISTERED", current_state) != 0 && strcmp("ALIVE", current_state))
-        {
-            if (n_bytes > 0)
-            {
-                correct = 1;
-                break;
-            }
-            n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *)&udp_addr_server, &fromlen);
-            if (n_bytes < 0)
-            { /* No s'ha rebut dades */
-                temp = sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *)&udp_addr_server, sizeof(udp_addr_server));
-                if (temp == -1)
-                {
-                    printf("Error sendTo \n");
-                    exit(-1);
-                }
-                packet_counter++;
-                debug("Enviat paquet REGISTER_REQ");
-                if (packet_counter == 8)
-                {
-                    break;
-                }
 
-                if ((interval * max) > t)
-                    t += interval;
-                sleep(t);
-            }
-            else
-            { /* s'han rebut dades */
-                correct = 1;
-                break;
-            }
-        }
         if (correct == 1)
             break;
-        if (packet_counter == 8)
-        {
-            sleep(5);
+
+        if (tries < max_tries - 1) {
             debug("Reiniciant procès subscripció");
+            sleep(u);
         }
     } /* Fi while d'enviar paquets */
 
-    if (tries == 3 && correct == 0)
-    { /* Comprova si s'ha sortit del bucle per màxim d'intents */
+    if (tries == max_tries && correct == 0) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
         print_msg("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
         exit(-1);
     }
@@ -305,6 +278,7 @@ void subscribe(struct client_config *config, struct sockaddr_in udp_addr_server,
     params.data = &data;
     treat_UDP_packet();
 }
+
 
 void send_alive()
 {
@@ -368,7 +342,7 @@ void send_alive()
             sleep(r);
         }
     }
-    subscribe(params.config, params.udp_addr_server, params.addr_cli);
+    subscribe(params.config, params.udp_addr_server, params.addr_client);
 }
 
 void set_periodic_comunication()
@@ -417,7 +391,7 @@ void set_periodic_comunication()
             print_msg("ESTAT: DISCONNECTED");
         debug("NO s'ha rebut resposta");
         debug("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
-        subscribe(params.config, params.udp_addr_server, params.addr_cli);
+        subscribe(params.config, params.udp_addr_server, params.addr_client);
     }
     else if (strcmp(current_state, "ALIVE") == 0 && pthread_created == 0)
     {
@@ -456,7 +430,7 @@ int treat_UDP_packet()
         if (counter < 3)
         {
             debug("Rebut REGISTER_NACK, reiniciant procès subscripció");
-            subscribe(params.config, params.udp_addr_server, params.addr_cli);
+            subscribe(params.config, params.udp_addr_server, params.addr_client);
             counter++;
             return 0;
         }
@@ -516,7 +490,7 @@ int treat_UDP_packet()
                 print_msg("ESTAT: DISCONNECTED");
             debug("Rebut ALIVE_REJ, possible suplantació d'identitat. Client pasa a estat DISCONNECTED");
             debug("Reiniciant proces subscripció");
-            subscribe(params.config, params.udp_addr_server, params.addr_cli);
+            subscribe(params.config, params.udp_addr_server, params.addr_client);
         }
         return 0;
     }
