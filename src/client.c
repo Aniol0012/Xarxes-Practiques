@@ -70,8 +70,8 @@ struct client_config{
   char MAC[13];
   char server[20];
   char random[7];
-  int UDPport;
-  int TCPport;
+  int UDP_port;
+  int TCP_port;
 };
 
 /*Estructura per a guardar dades per a comprovar als ALIVE */
@@ -158,19 +158,19 @@ int main(int argc, char **argv)
     printd("S'ha llegit l'arxiu de configuració");
 
     printf("La configuració llegida és la següent: \n \t Name: %s \n \t MAC: %s \n \t Server: %s \n \t Port: %i \n",
-           config.name, config.MAC, config.server, config.UDPport);
+           config.name, config.MAC, config.server, config.UDP_port);
 
     /* Adreça del bind del client */
     memset(&addr_client, 0, sizeof(struct sockaddr_in));
     addr_client.sin_family = AF_INET;
     addr_client.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_client.sin_port = htons(config.UDPport);
+    addr_client.sin_port = htons(config.UDP_port);
 
     /* Adreça del servidor */
     memset(&udp_addr_server, 0, sizeof(udp_addr_server));
     udp_addr_server.sin_family = AF_INET;
     udp_addr_server.sin_addr.s_addr = inet_addr(config.server);
-    udp_addr_server.sin_port = htons(config.UDPport);
+    udp_addr_server.sin_port = htons(config.UDP_port);
 
     /* Per a poder tractar els paquets més facilment més endavant */
     parameters.config = &config;
@@ -219,7 +219,7 @@ void read_software_config_file(struct client_config *config)
 
     fscanf(conf, "%s", word);
     fscanf(conf, "%s", word);
-    config->UDPport = atoi(word);
+    config->UDP_port = atoi(word);
     fclose(conf);
 }
 
@@ -451,7 +451,7 @@ int treat_UDP_packet()
             printd("S'ha rebut un REGISTER_ACK");
             set_current_state("REGISTERED");
             print_state(REGISTERED);
-            parameters.config->TCPport = atoi(parameters.data->data);
+            parameters.config->TCP_port = atoi(parameters.data->data);
             strcpy(parameters.config->random, parameters.data->random);
             strcpy(server_data.random, parameters.data->random);
             strcpy(server_data.name, parameters.data->name);
