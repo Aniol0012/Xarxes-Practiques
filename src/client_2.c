@@ -100,13 +100,14 @@ struct udp_PDU{
 };
 
 // CONFIGURACIÓ ADICIONAL (S'HA D'ACTIVAR MANUALMENT)
-bool show_local_time = true;
-bool show_client_info = true; // Mostra la informació rebuda per l'arxiu de configuració
-bool show_exit_status = false;
-bool debug_activated = false;
+bool show_local_time = true; // Mostra l'hora actual en els missatges | DEFAULT = TRUE
+bool show_client_info = false; // Mostra la informació rebuda per l'arxiu de configuració | DEFAULT = FALSE
+bool print_buffer = false; // Mostra la informació rebuda pel buffer | DEFAULT = FALSE
+bool show_exit_status = false; // Mostre en mode debug el codi de retorn del programa | DEFAULT = FALSE
+bool debug_activated = false; // Estat inicial del mode debug (s'activa amb el paràmetre -d) | DEFAULT = FALSE
 
-#define MAX_STATUS_LENGTH 18 // WAIT_REG_RESPONSE = 17 + '\0'
-#define MAX_FILENAME_LENGTH 12 // 'client2.cfg = 11 + '\0'
+#define MAX_STATUS_LENGTH 18 // strlen('WAIT_REG_RESPONSE') = 17 + '\0'
+#define MAX_FILENAME_LENGTH 12 // strlen('client2.cfg') = 11 + '\0'
 
 // DEFINIM VARIABLES GLOBALS
 int udp_socket;
@@ -133,6 +134,7 @@ int treat_UDP_packet();
 void send_alive();
 void get_network_file_size(char *size);
 void *wait_quit(void *arg);
+bool is_state_equal(char *str); // Comparem el nou estat amb l'actual
 
 // FUNCIONS PER A PRINTAR
 void println(char *str);
@@ -173,6 +175,8 @@ int main(int argc, char *argv[])
 			exit_program(EXIT_SUCCESS); // És una sortida controlada del programa
 		}
 	}
+
+    print_state(DISCONNECTED); // Partim de l'estat disconnected
 
     read_software_config_file(&config);
     strcpy(config.random, "000000");
@@ -306,9 +310,13 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
         exit_program(EXIT_FAIL);
     }
 
-    sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
-    //print_info(data.type, data.name, data.mac, data.random, data.data);
-    printd(buff);
+    if (show_client_info && debug_activated) {
+        sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
+        //print_info(data.type, data.name, data.mac, data.random, data.data);
+        if (print_buffer) {
+            printd(buff);
+        }
+    }
     parameters.data = &data;
     treat_UDP_packet();
 }
@@ -326,7 +334,7 @@ void send_alive()
     create_UDP(&alive_pdu, parameters.config, ALIVE_INF);
     while (1)
     {
-        while (strcmp(current_state, "SEND_ALIVE") == 0)
+        while (is_state_equal("SEND_ALIVE"))
         {
             temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *)&parameters.udp_addr_server, sizeof(parameters.udp_addr_server));
             printd("Enviat paquet ALIVE_INF");
@@ -340,8 +348,12 @@ void send_alive()
             {
                 i = 0;
                 parameters.data = &data;
-                sprintf(buff, "Rebut: bytes= %lu, type:%i, nom=%s, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.name, data.mac, data.random, data.data);
-                printd(buff);
+                if (show_client_info && debug_activated) {
+                    sprintf(buff, "Rebut: bytes= %lu, type:%i, nom=%s, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.name, data.mac, data.random, data.data);
+                    if (print_buffer) {
+                        printd(buff);
+                    }
+                }
                 packet_current_state = treat_UDP_packet();
                 if (packet_current_state == -1)
                 { /*Significa que es un paquet incorrecte */
@@ -441,7 +453,6 @@ void set_current_state(char _current_state[])
 int treat_UDP_packet()
 {
     char buff[300];
-    int equals;
     int correct = 0;
     switch (parameters.data->type)
     {
@@ -466,8 +477,7 @@ int treat_UDP_packet()
         printd("S'ha superat el número màxim d'intents");
         exit_program(EXIT_FAIL);
     case REGISTER_ACK:
-        equals = strcmp(current_state, "REGISTERED");
-        if (equals != 0)
+        if (!is_state_equal("REGISTERED"))
         {
             printd("S'ha rebut un REGISTER_ACK");
             set_current_state("REGISTERED");
@@ -485,18 +495,17 @@ int treat_UDP_packet()
         }
         return 0;
     case ALIVE_ACK:
-        equals = strcmp(current_state, "SEND_ALIVE");
         if (strcmp(parameters.data->random, server_data.random) == 0 && strcmp(parameters.data->name, server_data.name) == 0 && strcmp(parameters.data->mac, server_data.MAC) == 0)
         {
             correct = 1;
         }
-        if (equals != 0 && correct == 1)
+        if (!is_state_equal("SEND_ALIVE") && correct == 1)
         { /* Primer ack rebut */
             set_current_state("SEND_ALIVE");
             print_state(SEND_ALIVE);
             printd("Rebut ALIVE_ACK correcte, client passa a l'estat SEND_ALIVE");
         }
-        else if (equals == 0 && correct == 1)
+        else if (is_state_equal("SEND_ALIVE") && correct == 1)
         { /* Ja tenim estat SEND_ALIVE*/
             printd("Rebut ALIVE_ACK");
         }
@@ -509,8 +518,7 @@ int treat_UDP_packet()
     case ALIVE_NACK: /*No els tenim en compte, no caldria ficar-los */
         return 0;
     case ALIVE_REJ:
-        equals = strcmp(current_state, "SEND_ALIVE");
-        if (equals == 0)
+        if (is_state_equal("SEND_ALIVE"))
         {
             set_current_state("DISCONNECTED");
             printd("S'ha rebut un ALIVE_REJ");
@@ -596,6 +604,10 @@ void *wait_quit(void *arg) {
         }
     }
     return NULL;
+}
+
+bool is_state_equal(char *str) {
+    return strcmp(current_state, str) == 0;
 }
 
 ///////////////////////////////// FUNCIONS PER PRINTAR /////////////////////////////////
