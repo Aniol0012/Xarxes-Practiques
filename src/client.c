@@ -593,40 +593,6 @@ void treat_command(char command[])
     }
 }
 
-
-void parse_parameters(int argc, char **argv)
-{
-    int i;
-    if (argc > 1)
-    {
-        for (i = 0; i < argc; i++)
-        { /* PARSING PARAMETERS */
-            char const *option = argv[i];
-            if (option[0] == '-')
-            {
-                switch (option[1])
-                {
-                case 'd':
-                    debug_activated = true;
-                    print_bar();
-		            printf("\t\t\tMode debug activat\n");
-		            print_bar();
-                    break;
-                case 'c':
-                    strcpy(software_config_file, argv[i + 1]);
-                    break;
-                case 'f':
-                    strcpy(network_config_file, argv[i + 1]);
-                    break;
-                default:
-                    fprintf(stderr, "Wrong parameters Input \n");
-                    exit_program(EXIT_FAIL);
-                }
-            }
-        }
-    }
-}
-
 int open_socket(int protocol) {
 
     int socket_type;
@@ -705,7 +671,6 @@ void print_state(int current_state) {
 	print_time();
 	printf("MSG.  =>  Equip passa a l'estat: %s\n", current_state_str);
 }
-
 
 void exit_program(int EXIT_STATUS) {
 	printd("El programa s'ha aturat");
