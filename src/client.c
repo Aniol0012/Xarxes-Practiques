@@ -203,6 +203,7 @@ int main(int argc, char *argv[])
     return 1;
 }
 
+
 void read_software_config_file(struct client_config *config)
 {
     FILE *file;
@@ -216,7 +217,7 @@ void read_software_config_file(struct client_config *config)
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);   // No es la millor manera de fer-ho... pero ja que suposem que el fitxer es correcte
-    strcpy(config->name, label); // Ens saltem les comprovacions 
+    strcpy(config->name, label);
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
@@ -239,7 +240,6 @@ void read_software_config_file(struct client_config *config)
     config->UDP_port = atoi(label);
     fclose(file);
 }
-
 
 /*
 void read_software_config_file(struct client_config *config) {
@@ -276,6 +276,7 @@ void read_software_config_file(struct client_config *config) {
     fclose(file);
 }
 */
+
 
 
 // Crec que se pot treure el struct client_clonfig *config dels parametres perque es una variable global
