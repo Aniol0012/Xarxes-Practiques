@@ -101,15 +101,14 @@ struct udp_PDU{
 
 // CONFIGURACIÓ ADICIONAL (S'HA D'ACTIVAR MANUALMENT)
 bool show_local_time = true;
-bool show_client_info = false; // Mostra la informació rebuda per l'arxiu de configuració
+bool show_client_info = true; // Mostra la informació rebuda per l'arxiu de configuració
 bool show_exit_status = false;
 bool debug_activated = false;
 
 #define MAX_STATUS_LENGTH 18 // WAIT_REG_RESPONSE = 17 + '\0'
 #define MAX_FILENAME_LENGTH 12 // 'client2.cfg = 11 + '\0'
 
-/* Variables globals */
-bool debug_mode = false;
+// DEFINIM VARIABLES GLOBALS
 int udp_socket;
 char software_config_file[MAX_FILENAME_LENGTH] = "client.cfg";
 char network_config_file[MAX_FILENAME_LENGTH] = "boot.cfg"; // El -f crec q no sha de fer
@@ -118,10 +117,11 @@ int tcp_sock = 0, counter;
 int pthread_created = 0;
 struct parameters parameters;
 struct server_data server_data;
+struct client_config config;
+
 pthread_t alive_thread;
 
-/* Funcions */
-void parse_parameters(int argc, char **argv);
+// DECLARACIÓ DE FUNCIONS
 int open_socket(int protocol);
 void read_software_config_file(struct client_config *config);
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
@@ -143,22 +143,44 @@ void printd(char *str_given); // Printar debugs
 void print_bar();
 void print_state(int current_state);
 void print_time(); // Printar l'hora actual
+void print_info();
 void get_time(char *time_str);
 
-int main(int argc, char **argv)
+// CODI PRINCIPAL
+int main(int argc, char *argv[])
 {
     struct sockaddr_in udp_addr_server, addr_client;
-    struct client_config config;
 
-    parse_parameters(argc, argv);
+    for (int i = 1; i < argc; i++){
+		if (strcmp(argv[i], "-d") == 0){
+			debug_activated = true;
+            print_bar();
+		    printf("\t\t\tMode debug activat\n");
+		    print_bar();
+		}
+		else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc){ 
+			i++;
+			strcpy(software_config_file, argv[i]);
+		}
+		else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc){
+			i++;
+			strcpy(network_config_file, argv[i]);
+		}
+		else{
+			fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>]\n", argv[0]);
+			exit_program(EXIT_SUCCESS); // És una sortida controlada del programa
+		}
+	}
+
     read_software_config_file(&config);
     strcpy(config.random, "000000");
     config.random[6] = '\0';
 
     printd("S'ha llegit l'arxiu de configuració");
 
-    printf("La configuració llegida és la següent: \n \t Name: %s \n \t MAC: %s \n \t Server: %s \n \t Port: %i \n",
-           config.name, config.MAC, config.server, config.UDP_port);
+    //printf("La configuració llegida és la següent: \n \t Name: %s \n \t MAC: %s \n \t Server: %s \n \t Port: %i \n",
+           //config.name, config.MAC, config.server, config.UDP_port);
+    print_info();
 
     /* Adreça del bind del client */
     memset(&addr_client, 0, sizeof(struct sockaddr_in));
@@ -284,6 +306,7 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
     }
 
     sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
+    //print_info(data.type, data.name, data.mac, data.random, data.data);
     printd(buff);
     parameters.data = &data;
     treat_UDP_packet();
@@ -533,6 +556,16 @@ void get_network_file_size(char *str_size)
     fclose(f);
 }
 
+void print_info() {
+    if (show_client_info && debug_activated) {
+        printd("La informació obtinguda de l'arxiu de configuració ha estat:");
+        printf("\t\t\t\tId equip: %s\n", config.name);
+        printf("\t\t\t\tAdreça MAC: %s\n", config.MAC);
+        printf("\t\t\t\tNMS-Id: %s\n", config.server);
+        printf("\t\t\t\tNMS-UDP-Port: %d\n", config.UDP_port);
+    }
+}
+
 // Aixo s'ha de tocar si o si
 
 void read_commands()
@@ -574,7 +607,7 @@ void parse_parameters(int argc, char **argv)
                 switch (option[1])
                 {
                 case 'd':
-                    debug_mode = true;
+                    debug_activated = true;
                     print_bar();
 		            printf("\t\t\tMode debug activat\n");
 		            print_bar();
@@ -592,7 +625,6 @@ void parse_parameters(int argc, char **argv)
             }
         }
     }
-    printd("S'ha seleccionat l'opció printd");
 }
 
 int open_socket(int protocol) {
