@@ -128,7 +128,6 @@ int open_socket(int protocol);
 void read_software_config_file(struct client_config *config);
 void send_register_request(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client);
 void create_UDP(struct udp_PDU *pdu, struct client_config *config, unsigned char petition);
-void set_current_state(char _current_state[]);
 void set_periodic_comunication();
 int treat_UDP_packet();
 void send_alive();
@@ -146,6 +145,8 @@ void print_time(); // Printar l'hora actual
 void print_info();
 void get_time(char *time_str);
 void print_n();
+
+// S'ha de cambiar tots els strcmp == 0 per is_state_equal("REGISTERED");
 
 // CODI PRINCIPAL
 int main(int argc, char *argv[])
@@ -360,8 +361,6 @@ void send_alive()
                     incorrecte += 1;
                     if (incorrecte == u)
                     {
-                        set_current_state("DISCONNECTED");
-                        println("ESTAT: DISCONNECTED");
                         print_state(DISCONNECTED);
                         printd("No s'ha rebut tres paquets de confirmació d'SEND_ALIVE consecutius correctes.");
                         printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
@@ -378,8 +377,7 @@ void send_alive()
                 i++;
                 if (i == u)
                 { /*Comprova que no s'ha rebut 3 paquets seguits de confirmació d'ALive*/
-                    set_current_state("DISCONNECTED");
-                    println("ESTAT: DISCONNECTED");
+                    print_state(DISCONNECTED);
                     printd("No s'ha rebut confirmació de tres paquets de rebuda de paquets SEND_ALIVE consecutius.");
                     printd("Client passa a l'estat DISCONNECTED i reinicia el proces de subscripció");
                     break;
@@ -430,9 +428,8 @@ void set_periodic_comunication()
         }
     }
 
-    if (strcmp(current_state, "REGISTERED") == 0)
+    if (is_state_equal("REGISTERED"))
     {
-        set_current_state("DISCONNECTED");
         print_state(DISCONNECTED);
         printd("NO s'ha rebut resposta");
         printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
@@ -446,11 +443,6 @@ void set_periodic_comunication()
     }
 }
 
-void set_current_state(char _current_state[])
-{
-    strcpy(current_state, _current_state);
-}
-
 int treat_UDP_packet()
 {
     char buff[300];
@@ -460,7 +452,6 @@ int treat_UDP_packet()
     case REGISTER_REJ:
         sprintf(buff, "S'ha rebutjat el client, motiu: %s", parameters.data->data);
         println(buff);
-        set_current_state("DISCONNECTED");
         print_state(DISCONNECTED);
         exit_program(EXIT_FAIL);
     case REGISTER_NACK:
@@ -481,7 +472,6 @@ int treat_UDP_packet()
         if (!is_state_equal("REGISTERED"))
         {
             printd("S'ha rebut un REGISTER_ACK");
-            set_current_state("REGISTERED");
             print_state(REGISTERED);
             parameters.config->TCP_port = atoi(parameters.data->data);
             strcpy(parameters.config->random, parameters.data->random);
@@ -502,7 +492,6 @@ int treat_UDP_packet()
         }
         if (!is_state_equal("SEND_ALIVE") && correct == 1)
         { /* Primer ack rebut */
-            set_current_state("SEND_ALIVE");
             print_state(SEND_ALIVE);
             printd("Rebut ALIVE_ACK correcte, client passa a l'estat SEND_ALIVE");
         }
@@ -521,7 +510,6 @@ int treat_UDP_packet()
     case ALIVE_REJ:
         if (is_state_equal("SEND_ALIVE"))
         {
-            set_current_state("DISCONNECTED");
             printd("S'ha rebut un ALIVE_REJ");
             print_state(DISCONNECTED);
             printd("Reinici del procés de registre");
