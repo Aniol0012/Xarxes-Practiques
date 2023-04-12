@@ -553,10 +553,12 @@ bool is_state_equal(char *str) {
 void print_client_info() {
     if (show_client_info && debug) {
         printd("La informació obtinguda de l'arxiu de configuració ha estat:");
-        printf("\t\t\t\tId equip: %s\n", config.name);
-        printf("\t\t\t\tAdreça MAC: %s\n", config.MAC);
-        printf("\t\t\t\tNMS-Id: %s\n", config.server);
-        printf("\t\t\t\tNMS-UDP-Port: %d\n", config.UDP_port);
+        printf("\t\t\t┌───────────────────────────────────┐\n");
+        printf("\t\t\t│\tId equip: %s\t    │\n", config.name);
+        printf("\t\t\t│\tAdreça MAC: %s    │\n", config.MAC);
+        printf("\t\t\t│\tNMS-Id: %s\t    │\n", config.server);
+        printf("\t\t\t│\tNMS-UDP-Port: %d\t    │\n", config.UDP_port);
+        printf("\t\t\t└───────────────────────────────────┘\n");
     }
 }
 
