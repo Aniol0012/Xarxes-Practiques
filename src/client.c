@@ -216,7 +216,7 @@ void read_software_config_file(struct client_config *config)
     }
 
     fscanf(file, "%s", label);
-    fscanf(file, "%s", label);   // No es la millor manera de fer-ho... pero ja que suposem que el fitxer es correcte
+    fscanf(file, "%s", label);
     strcpy(config->name, label);
 
     fscanf(file, "%s", label);
@@ -225,7 +225,7 @@ void read_software_config_file(struct client_config *config)
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
-    // Tractar en una funció
+
     if (strcmp(label, "localhost") == 0)
     {
         strcpy(config->server, "127.0.0.1");
@@ -241,44 +241,6 @@ void read_software_config_file(struct client_config *config)
     fclose(file);
 }
 
-/*
-void read_software_config_file(struct client_config *config) {
-    FILE *file;
-    char label[50], value[50];
-
-    file = fopen(software_config_file, "r");
-    if (file == NULL) {
-        fprintf(stderr, "Ha sorgit un error a l'obrir l'arxiu");
-        exit_program(EXIT_FAIL);
-    }
-
-    while (fscanf(file, "%s %s", label, value) == 2) {
-        if (strcmp(label, "Id") == 0) {
-            strncpy(config->name, value, sizeof(config->name) - 1);
-            config->name[sizeof(config->name) - 1] = '\0';
-        } else if (strcmp(label, "MAC") == 0) {
-            strncpy(config->MAC, value, sizeof(config->MAC) - 1);
-            config->MAC[sizeof(config->MAC) - 1] = '\0';
-        } else if (strcmp(label, "NMS-Id") == 0) {
-            if (strcmp(value, "localhost") == 0) {
-                strncpy(config->server, "127.0.0.1", sizeof(config->server) - 1);
-            } else {
-                strncpy(config->server, value, sizeof(config->server) - 1);
-            }
-            config->server[sizeof(config->server) - 1] = '\0';
-        } else if (strcmp(label, "NMS-UDP-port") == 0) {
-            config->UDP_port = atoi(value);
-        } else {
-            fprintf(stderr, "Etiqueta desconeguda: %s\n", label);
-        }
-    }
-
-    fclose(file);
-}
-*/
-
-
-
 // Crec que se pot treure el struct client_clonfig *config dels parametres perque es una variable global
 void send_register_request(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client) {
     int tries, max_tries = 2, n_bytes;
@@ -289,10 +251,9 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
     char buff[300];
     fromlen = sizeof(udp_addr_server);
 
-    /* Creació paquet registre */
+    // Creem un paquet de registre
     create_UDP(&reg_pdu, config, REGISTER_REQ);
 
-    /* Inici proces subscripció */
     for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state); tries++) {
         int packet_counter = 0, interval = T, t = T;
         int p = P, q = Q, n = N, u = U;
@@ -347,6 +308,92 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
     }
     parameters.data = &data;
     treat_UDP_packet();
+}
+
+int treat_UDP_packet()
+{
+    char buffer[300];
+    int correct = 0;
+    switch (parameters.data->type)
+    {
+    case REGISTER_REJ:
+        sprintf(buffer, "S'ha rebutjat el client, motiu: %s", parameters.data->data);
+        println(buffer);
+        print_state(DISCONNECTED);
+        exit_program(EXIT_FAIL);
+    case REGISTER_NACK:
+        if (counter < 3)
+        {
+            printd("Rebut REGISTER_NACK, reiniciant el procès de registre");
+            send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
+            counter++;
+            return 0;
+        }
+        printd("S'ha superat el número màxim d'intents");
+        exit_program(EXIT_FAIL);
+    case REGISTER_ACK:
+        if (!is_state_equal("REGISTERED"))
+        {
+            printd("S'ha rebut un REGISTER_ACK");
+            print_state(REGISTERED);
+            parameters.config->TCP_port = atoi(parameters.data->data);
+            strcpy(parameters.config->random, parameters.data->random);
+            strcpy(server_data.random, parameters.data->random);
+            strcpy(server_data.name, parameters.data->name);
+            strcpy(server_data.MAC, parameters.data->mac);
+            set_periodic_comunication();
+        }
+        else
+        {
+            printd("S'ha rebut un REGISTER_ACK");
+        }
+        return 0;
+    case ALIVE_ACK:
+        if (strcmp(parameters.data->random, server_data.random) == 0 && strcmp(parameters.data->name, server_data.name) == 0 && strcmp(parameters.data->mac, server_data.MAC) == 0)
+        {
+            correct = 1;
+        }
+        if (!is_state_equal("SEND_ALIVE") && correct == 1)
+        { /* Primer ack rebut */
+            print_state(SEND_ALIVE);
+            printd("Rebut ALIVE_ACK correcte, client passa a l'estat SEND_ALIVE");
+        }
+        else if (is_state_equal("SEND_ALIVE") && correct == 1)
+        { /* Ja tenim estat SEND_ALIVE*/
+            printd("Rebut ALIVE_ACK");
+        }
+        else
+        {
+            printd("Rebut ALIVE_ACK incorrecte");
+            return -1;
+        }
+        return 0;
+    case ALIVE_REJ:
+        if (is_state_equal("SEND_ALIVE"))
+        {
+            printd("S'ha rebut un ALIVE_REJ");
+            print_state(DISCONNECTED);
+            printd("Reinici del procés de registre");
+            send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
+        }
+        return 0;
+    default:
+        return 0;
+    }
+}
+
+void create_UDP(struct udp_PDU *pdu, struct client_config *configuracio, unsigned char peticio)
+{
+    pdu->type = peticio;
+    strcpy(pdu->name, configuracio->name);
+    strcpy(pdu->mac, configuracio->MAC);
+    strcpy(pdu->random, configuracio->random);
+    memset(pdu->data, '\0', sizeof(char) * 49);
+
+    if (peticio == REGISTER_REQ)
+    {
+        pdu->data[49] = '\0';
+    }
 }
 
 void send_alive()
@@ -465,92 +512,6 @@ void set_periodic_comunication()
     else if (is_state_equal("SEND_ALIVE"))
     {
         printd("Creat procés per mantenir comunicació periodica amb el servidor");
-    }
-}
-
-int treat_UDP_packet()
-{
-    char buffer[300];
-    int correct = 0;
-    switch (parameters.data->type)
-    {
-    case REGISTER_REJ:
-        sprintf(buffer, "S'ha rebutjat el client, motiu: %s", parameters.data->data);
-        println(buffer);
-        print_state(DISCONNECTED);
-        exit_program(EXIT_FAIL);
-    case REGISTER_NACK:
-        if (counter < 3)
-        {
-            printd("Rebut REGISTER_NACK, reiniciant el procès de registre");
-            send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
-            counter++;
-            return 0;
-        }
-        printd("S'ha superat el número màxim d'intents");
-        exit_program(EXIT_FAIL);
-    case REGISTER_ACK:
-        if (!is_state_equal("REGISTERED"))
-        {
-            printd("S'ha rebut un REGISTER_ACK");
-            print_state(REGISTERED);
-            parameters.config->TCP_port = atoi(parameters.data->data);
-            strcpy(parameters.config->random, parameters.data->random);
-            strcpy(server_data.random, parameters.data->random);
-            strcpy(server_data.name, parameters.data->name);
-            strcpy(server_data.MAC, parameters.data->mac);
-            set_periodic_comunication();
-        }
-        else
-        {
-            printd("S'ha rebut un REGISTER_ACK");
-        }
-        return 0;
-    case ALIVE_ACK:
-        if (strcmp(parameters.data->random, server_data.random) == 0 && strcmp(parameters.data->name, server_data.name) == 0 && strcmp(parameters.data->mac, server_data.MAC) == 0)
-        {
-            correct = 1;
-        }
-        if (!is_state_equal("SEND_ALIVE") && correct == 1)
-        { /* Primer ack rebut */
-            print_state(SEND_ALIVE);
-            printd("Rebut ALIVE_ACK correcte, client passa a l'estat SEND_ALIVE");
-        }
-        else if (is_state_equal("SEND_ALIVE") && correct == 1)
-        { /* Ja tenim estat SEND_ALIVE*/
-            printd("Rebut ALIVE_ACK");
-        }
-        else
-        {
-            printd("Rebut ALIVE_ACK incorrecte");
-            return -1;
-        }
-        return 0;
-    case ALIVE_REJ:
-        if (is_state_equal("SEND_ALIVE"))
-        {
-            printd("S'ha rebut un ALIVE_REJ");
-            print_state(DISCONNECTED);
-            printd("Reinici del procés de registre");
-            send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
-        }
-        return 0;
-    default:
-        return 0;
-    }
-}
-
-void create_UDP(struct udp_PDU *pdu, struct client_config *configuracio, unsigned char peticio)
-{
-    pdu->type = peticio;
-    strcpy(pdu->name, configuracio->name);
-    strcpy(pdu->mac, configuracio->MAC);
-    strcpy(pdu->random, configuracio->random);
-    memset(pdu->data, '\0', sizeof(char) * 49);
-
-    if (peticio == REGISTER_REQ)
-    {
-        pdu->data[49] = '\0';
     }
 }
 
