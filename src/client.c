@@ -133,6 +133,7 @@ int treat_UDP_packet();
 void send_alive();
 void get_network_file_size(char *size);
 void *wait_quit(void *arg);
+bool is_state_equal(char *str); // Comparem el nou estat amb l'actual
 
 // FUNCIONS PER A PRINTAR
 void println(char *str);
@@ -173,6 +174,8 @@ int main(int argc, char *argv[])
 			exit_program(EXIT_SUCCESS); // És una sortida controlada del programa
 		}
 	}
+
+    print_state(DISCONNECTED); // Partim de l'estat disconnected
 
     read_software_config_file(&config);
     strcpy(config.random, "000000");
@@ -306,9 +309,11 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
         exit_program(EXIT_FAIL);
     }
 
-    sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
-    //print_info(data.type, data.name, data.mac, data.random, data.data);
-    printd(buff);
+    if (show_client_info && debug_activated) {
+        sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
+        //print_info(data.type, data.name, data.mac, data.random, data.data);
+        printd(buff);
+    }
     parameters.data = &data;
     treat_UDP_packet();
 }
@@ -326,7 +331,7 @@ void send_alive()
     create_UDP(&alive_pdu, parameters.config, ALIVE_INF);
     while (1)
     {
-        while (strcmp(current_state, "SEND_ALIVE") == 0)
+        while (is_state_equal("SEND_ALIVE"))
         {
             temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *)&parameters.udp_addr_server, sizeof(parameters.udp_addr_server));
             printd("Enviat paquet ALIVE_INF");
@@ -596,6 +601,10 @@ void *wait_quit(void *arg) {
         }
     }
     return NULL;
+}
+
+bool is_state_equal(char *str) {
+    return strcmp(current_state, str) == 0;
 }
 
 ///////////////////////////////// FUNCIONS PER PRINTAR /////////////////////////////////
