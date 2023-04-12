@@ -293,7 +293,7 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
     create_UDP(&reg_pdu, config, REGISTER_REQ);
 
     /* Inici proces subscripció */
-    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state); tries++) {
+    for (tries = 0; tries < max_tries && (!is_state_equal("REGISTERED")) && is_state_equal("SEND_ALIVE"); tries++) {
         int packet_counter = 0, interval = T, t = T;
         int p = P, q = Q, n = N, u = U;
         
