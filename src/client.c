@@ -463,7 +463,7 @@ int treat_UDP_packet()
             counter++;
             return 0;
         }
-        printd("Superat màxim d'intents. Tancant client.");
+        printd("S'ha superat el número màxim d'intents");
         exit_program(EXIT_FAIL);
     case REGISTER_ACK:
         equals = strcmp(current_state, "REGISTERED");
