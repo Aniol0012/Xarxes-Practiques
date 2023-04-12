@@ -101,10 +101,10 @@ struct udp_PDU{
 
 // CONFIGURACIÓ ADICIONAL (S'HA D'ACTIVAR MANUALMENT)
 bool show_local_time = true; // Mostra l'hora actual en els missatges | DEFAULT = TRUE
-bool show_client_info = false; // Mostra la informació rebuda per l'arxiu de configuració | DEFAULT = FALSE
+bool show_client_info = true; // Mostra la informació rebuda per l'arxiu de configuració | DEFAULT = FALSE
 bool print_buffer = false; // Mostra la informació rebuda pel buffer | DEFAULT = FALSE
 bool show_exit_status = false; // Mostre en mode debug el codi de retorn del programa | DEFAULT = FALSE
-bool debug_activated = false; // Estat inicial del mode debug (s'activa amb el paràmetre -d) | DEFAULT = FALSE
+bool debug = false; // Estat inicial del mode debug (s'activa amb el paràmetre -d) | DEFAULT = FALSE
 
 #define MAX_STATUS_LENGTH 18 // strlen('WAIT_REG_RESPONSE') = 17 + '\0'
 #define MAX_FILENAME_LENGTH 12 // strlen('client2.cfg') = 11 + '\0'
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 
     for (int i = 1; i < argc; i++){
 		if (strcmp(argv[i], "-d") == 0){
-			debug_activated = true;
+			debug = true;
             print_bar();
 		    printf("\t\t\tMode debug activat\n");
 		    print_bar();
@@ -205,41 +205,80 @@ int main(int argc, char *argv[])
 
 void read_software_config_file(struct client_config *config)
 {
-    FILE *conf;
-    char word[50];
-    conf = fopen(software_config_file, "r");
-    if (conf == NULL)
+    FILE *file;
+    char label[50];
+    file = fopen(software_config_file, "r");
+    if (file == NULL)
     {
-        fprintf(stderr, "Error obrir arxiu");
+        fprintf(stderr, "Ha sorgit un error a l'obrir l'arxiu");
         exit_program(EXIT_FAIL);
     }
 
-    fscanf(conf, "%s", word);
-    fscanf(conf, "%s", word);   /* No es la millor manera de fer-ho... pero ja que suposem que el fitxer es correcte*/
-    strcpy(config->name, word); /*  Ens saltem les comprovacions */
+    fscanf(file, "%s", label);
+    fscanf(file, "%s", label);   // No es la millor manera de fer-ho... pero ja que suposem que el fitxer es correcte
+    strcpy(config->name, label); // Ens saltem les comprovacions 
 
-    fscanf(conf, "%s", word);
-    fscanf(conf, "%s", word);
-    strcpy(config->MAC, word);
+    fscanf(file, "%s", label);
+    fscanf(file, "%s", label);
+    strcpy(config->MAC, label);
 
-    fscanf(conf, "%s", word);
-    fscanf(conf, "%s", word);
+    fscanf(file, "%s", label);
+    fscanf(file, "%s", label);
     // Tractar en una funció
-    if (strcmp(word, "localhost") == 0)
+    if (strcmp(label, "localhost") == 0)
     {
         strcpy(config->server, "127.0.0.1");
     }
     else
     {
-        strcpy(config->server, word);
+        strcpy(config->server, label);
     }
 
-    fscanf(conf, "%s", word);
-    fscanf(conf, "%s", word);
-    config->UDP_port = atoi(word);
-    fclose(conf);
+    fscanf(file, "%s", label);
+    fscanf(file, "%s", label);
+    config->UDP_port = atoi(label);
+    fclose(file);
 }
 
+
+/*
+void read_software_config_file(struct client_config *config) {
+    FILE *file;
+    char label[50], value[50];
+
+    file = fopen(software_config_file, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Ha sorgit un error a l'obrir l'arxiu");
+        exit_program(EXIT_FAIL);
+    }
+
+    while (fscanf(file, "%s %s", label, value) == 2) {
+        if (strcmp(label, "Id") == 0) {
+            strncpy(config->name, value, sizeof(config->name) - 1);
+            config->name[sizeof(config->name) - 1] = '\0';
+        } else if (strcmp(label, "MAC") == 0) {
+            strncpy(config->MAC, value, sizeof(config->MAC) - 1);
+            config->MAC[sizeof(config->MAC) - 1] = '\0';
+        } else if (strcmp(label, "NMS-Id") == 0) {
+            if (strcmp(value, "localhost") == 0) {
+                strncpy(config->server, "127.0.0.1", sizeof(config->server) - 1);
+            } else {
+                strncpy(config->server, value, sizeof(config->server) - 1);
+            }
+            config->server[sizeof(config->server) - 1] = '\0';
+        } else if (strcmp(label, "NMS-UDP-port") == 0) {
+            config->UDP_port = atoi(value);
+        } else {
+            fprintf(stderr, "Etiqueta desconeguda: %s\n", label);
+        }
+    }
+
+    fclose(file);
+}
+*/
+
+
+// Crec que se pot treure el struct client_clonfig *config dels parametres perque es una variable global
 void send_register_request(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client) {
     int tries, max_tries = 2, n_bytes;
     int correct = 0; /*variable per saber si s'ha aconseguit correctament el registre */
@@ -264,8 +303,7 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
 
             if (strcmp(current_state, "DISCONNECTED") == 0) {
                 print_state(WAIT_REG_RESPONSE);
-                
-                printd("Passat a l'estat WAIT_REG_RESPONSE");
+                sleep(T);
             }
 
             n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *)&udp_addr_server, &fromlen);
@@ -299,7 +337,7 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
         exit_program(EXIT_FAIL);
     }
 
-    if (show_client_info && debug_activated) {
+    if (show_client_info && debug) {
         sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.mac, data.random, data.data);
         //print_info(data.type, data.name, data.mac, data.random, data.data);
         if (print_buffer) {
@@ -336,7 +374,7 @@ void send_alive()
             {
                 i = 0;
                 parameters.data = &data;
-                if (show_client_info && debug_activated) {
+                if (show_client_info && debug) {
                     sprintf(buffer, "Rebut: bytes= %lu, type:%i, nom=%s, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, data.name, data.mac, data.random, data.data);
                     if (print_buffer) {
                         printd(buffer);
@@ -516,7 +554,7 @@ void create_UDP(struct udp_PDU *pdu, struct client_config *configuracio, unsigne
 }
 
 void print_info() {
-    if (show_client_info && debug_activated) {
+    if (show_client_info && debug) {
         printd("La informació obtinguda de l'arxiu de configuració ha estat:");
         printf("\t\t\t\tId equip: %s\n", config.name);
         printf("\t\t\t\tAdreça MAC: %s\n", config.MAC);
@@ -586,7 +624,7 @@ void println(char *str) {
 }
 
 void printd(char *str_given) {
-	if (debug_activated) {
+	if (debug) {
 		print_time();
 		printf("DEBUG MSG.  =>  %s\n", str_given);
 	}
