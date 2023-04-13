@@ -414,7 +414,7 @@ void send_alives() {
         temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *) &parameters.udp_addr_server,
                       sizeof(parameters.udp_addr_server));
         if (temp == -1) {
-            printf("Error sendTo \n");
+            printd("Ha sorgit un error en el sendto");
         }
         sleep(r);
         n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT,
@@ -436,12 +436,9 @@ void send_alives() {
     }
 
     if (is_state_equal("REGISTERED")) {
+        printd("No s'ha rebut resposta del servidor, reiniciem el procés de registre");
         print_state(DISCONNECTED);
-        printd("NO s'ha rebut resposta");
-        printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
         send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
-    } else if (is_state_equal("SEND_ALIVE")) {
-        printd("Creat procés per mantenir comunicació periodica amb el servidor");
     }
 }
 

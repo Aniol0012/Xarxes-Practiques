@@ -130,8 +130,7 @@ struct udp_PDU create_packet(char type[], char mac[], char random_num[], char da
 void read_client_config(struct client_config *client_data); // Llegeix la configuració del arxiu de configuració del client
 void send_register_request(struct client_config *client_data, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client); // Fa la petició de registre al servidor
 void process_UDP_packet(); // Fa el tractament del packet UDP
-void setup_UDP_packet(struct udp_PDU *pdu, struct client_config *client_data, unsigned char petition);
-
+void setup_UDP_packet(struct client_config *configuracio, struct udp_PDU *pdu, unsigned char request); // Preparem un paquet UDP
 void send_alives(); // Envia comunicació periòdica al servidor
 int open_socket(int protocol); // Obrim un socket en funció del protocol proporcionat
 void *wait_quit(void *arg); // Una funció en un altre thread que espera comandes com el quit
@@ -264,7 +263,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     fromlen = sizeof(udp_addr_server);
 
     // Creem un paquet de registre
-    setup_UDP_packet(&reg_pdu, client_data, REGISTER_REQ);
+    setup_UDP_packet(client_data, &reg_pdu, REGISTER_REQ);
 
     for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 &&
                     strcmp("SEND_ALIVE", current_state); tries++) {
@@ -323,6 +322,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     process_UDP_packet();
 }
 
+// Fa el tractament del packet UDP
 void process_UDP_packet() {
     char buffer[BUFFER_SIZE]; // Buffer per emmagatzemar missatges temporals
     bool is_ALIVE_ACK_Valid = false;
@@ -354,7 +354,8 @@ void process_UDP_packet() {
                 send_alives();
             }
             break;
-        case ALIVE_ACK: // Comprova si les dades del paquet ALIVE_ACK són correctes
+        case ALIVE_ACK: // Confirmació de recepció d’informació d’alive
+            // Comprova si les dades del paquet ALIVE_ACK són correctes
             if (strcmp(parameters.data->random, server_data.random) == 0 &&
                 strcmp(parameters.data->name, server_data.name) == 0 &&
                 strcmp(parameters.data->mac, server_data.MAC) == 0) {
@@ -386,32 +387,34 @@ void process_UDP_packet() {
     }
 }
 
-void setup_UDP_packet(struct udp_PDU *pdu, struct client_config *configuracio, unsigned char peticio) {
-    pdu->type = peticio;
+// Preparem un paquet UDP
+void setup_UDP_packet(struct client_config *configuracio, struct udp_PDU *pdu, unsigned char request) {
+    pdu->type = request;
     strcpy(pdu->name, configuracio->name);
     strcpy(pdu->mac, configuracio->MAC);
     strcpy(pdu->random, configuracio->random);
     memset(pdu->data, '\0', sizeof(char) * 49);
 
-    if (peticio == REGISTER_REQ) {
+    if (request == REGISTER_REQ) {
         pdu->data[49] = '\0';
     }
 }
 
+// Envia comunicació periòdica al servidor
 void send_alives() {
-    int r = 3, u = 0, temp, n_bytes;
+    int r = R, u = 0, temp, n_bytes;
     char buffer[BUFFER_SIZE];
     socklen_t fromlen;
     struct udp_PDU alive_pdu;
     struct udp_PDU data;
-    setup_UDP_packet(&alive_pdu, parameters.client_data, ALIVE_INF);
+    setup_UDP_packet(parameters.client_data, &alive_pdu, ALIVE_INF);
     fromlen = sizeof(&parameters.udp_addr_server);
 
-    while (true && u != 3) {
+    while (true && u != U_2) {
         temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *) &parameters.udp_addr_server,
                       sizeof(parameters.udp_addr_server));
         if (temp == -1) {
-            printf("Error sendTo \n");
+            printd("Ha sorgit un error en el sendto");
         }
         sleep(r);
         n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT,
@@ -424,7 +427,7 @@ void send_alives() {
             }
             memset(buffer, '\0', sizeof(buffer));
             process_UDP_packet();
-            if (is_state_equal("SEND_ALIVE") || u == 3) {
+            if (is_state_equal("SEND_ALIVE") || u == U_2) {
                 break;
             }
         } else {
@@ -433,12 +436,9 @@ void send_alives() {
     }
 
     if (is_state_equal("REGISTERED")) {
+        printd("No s'ha rebut resposta del servidor, reiniciem el procés de registre");
         print_state(DISCONNECTED);
-        printd("NO s'ha rebut resposta");
-        printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
         send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
-    } else if (is_state_equal("SEND_ALIVE")) {
-        printd("Creat procés per mantenir comunicació periodica amb el servidor");
     }
 }
 
