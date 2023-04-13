@@ -123,13 +123,16 @@ int NACK_counter = 0; // Número de REGISTER_NACK que s'han rebut
 bool already_sent_alive = false; // Només printem en el cas que no s'hagi canviat el current_state a SEND_ALIVE
 
 // DEFINIM ESTRUCTURES GLOBALS
+struct sockaddr_in udp_addr_server, addr_client;
 struct parameters parameters;
 struct server_data server_data;
 struct client_config client_data;
-
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
 
 // DECLARACIÓ DE FUNCIONS
+void bind_client(struct sockaddr_in *addr_client, struct client_config *client_data); // Fa el bind del client
+void bind_server(struct sockaddr_in *udp_addr_server, struct client_config *client_data); // Fa el bind del servidor
+void initialize_parameters(struct parameters *params, struct client_config *client_data, struct sockaddr_in *addr_client, struct sockaddr_in *udp_addr_server); // Configura i inicialitza els paràmetres utilitzats en el programa
 void read_client_config(struct client_config *client_data); // Llegeix la configuració del arxiu de configuració del client
 void send_register_request(struct client_config *client_data, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client); // Fa la petició de registre al servidor
 void process_UDP_packet(); // Fa el tractament del packet UDP
@@ -153,7 +156,6 @@ void print_bar(); // Printa una barra horitzontal decorativa
 ///////////////////////////////// CODI PRINCIPAL /////////////////////////////////
 
 int main(int argc, char *argv[]) {
-    struct sockaddr_in udp_addr_server, addr_client;
 
     pthread_t wait_quit_thread; // Creem el fil per a l'espera de la comanda
     pthread_create(&wait_quit_thread, NULL, wait_quit, NULL); // Iniciem el fil concurrent
@@ -183,25 +185,19 @@ int main(int argc, char *argv[]) {
 
     print_client_info();
 
-    // Fem el binding del client
-    memset(&addr_client, 0, sizeof(struct sockaddr_in));
-    addr_client.sin_family = AF_INET;
-    addr_client.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_client.sin_port = htons(client_data.UDP_port);
-
-    // Fem el binding del servidor
-    memset(&udp_addr_server, 0, sizeof(udp_addr_server));
-    udp_addr_server.sin_family = AF_INET;
-    udp_addr_server.sin_addr.s_addr = inet_addr(client_data.server);
-    udp_addr_server.sin_port = htons(client_data.UDP_port);
-
-    // Guardem l'estructura
-    parameters.client_data = &client_data;
-    parameters.addr_client = addr_client;
-    parameters.udp_addr_server = udp_addr_server;
-
     // Obrim un socket UDP
     udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
+
+    // Fem el binding del client
+    struct sockaddr_in addr_client;
+    bind_client(&addr_client, &client_data);
+
+    // Fem el binding del servidor
+    struct sockaddr_in udp_addr_server;
+    bind_server(&udp_addr_server, &client_data);
+
+    // Inicialitzem l'estructura de paràmetres
+    initialize_parameters(&parameters, &client_data, &addr_client, &udp_addr_server);
 
     send_register_request(&client_data, addr_client, udp_addr_server);
     pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
@@ -209,6 +205,29 @@ int main(int argc, char *argv[]) {
 }
 
 ///////////////////////////////// FUNCIONS AUXILIARS /////////////////////////////////
+
+// Fa el bind del client
+void bind_client(struct sockaddr_in *addr_client, struct client_config *client_data) {
+    memset(addr_client, 0, sizeof(struct sockaddr_in));
+    addr_client->sin_family = AF_INET;
+    addr_client->sin_addr.s_addr = htonl(INADDR_ANY);
+    addr_client->sin_port = htons(client_data->UDP_port);
+}
+
+// Fa el bind del servidor
+void bind_server(struct sockaddr_in *udp_addr_server, struct client_config *client_data) {
+    memset(udp_addr_server, 0, sizeof(*udp_addr_server));
+    udp_addr_server->sin_family = AF_INET;
+    udp_addr_server->sin_addr.s_addr = inet_addr(client_data->server);
+    udp_addr_server->sin_port = htons(client_data->UDP_port);
+}
+
+// Configura i inicialitza els paràmetres utilitzats en el programa
+void initialize_parameters(struct parameters *params, struct client_config *client_data, struct sockaddr_in *addr_client, struct sockaddr_in *udp_addr_server) {
+    params->client_data = client_data;
+    params->addr_client = *addr_client;
+    params->udp_addr_server = *udp_addr_server;
+}
 
 // Llegeix la configuració del arxiu de configuració del client
 void read_client_config(struct client_config *client_data) {
@@ -258,24 +277,21 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     // Creem un paquet de registre
     setup_UDP_packet(client_data, &reg_pdu, REGISTER_REQ);
 
-    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 &&
-                    strcmp("SEND_ALIVE", current_state) != 0; tries++) {
+    for (tries = 0; tries < max_tries && !is_state_equal("REGISTERED") && !is_state_equal("SEND_ALIVE"); tries++) {
         int packet_counter = 0;
         int t = T, p = P, q = Q, n = N, u = U;
 
-        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state) != 0) {
-            sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *) &udp_addr_server,
-                   sizeof(udp_addr_server));
+        while (packet_counter < n && !is_state_equal("SEND_ALIVE") && !is_state_equal("REGISTERED")) {
+            sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *) &udp_addr_server, sizeof(udp_addr_server));
             packet_counter++;
-            printd("Enviat paquet REGISTER_REQ");
+            printd("S'ha enviat paquet REGISTER_REQ");
 
-            if (strcmp(current_state, "DISCONNECTED") == 0) {
-                print_state(WAIT_REG_RESPONSE);
+            if (is_state_equal("DISCONNECTED")) {
+                print_state(WAIT_REG_RESPONSE); 
                 sleep(T);
             }
 
-            n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *) &udp_addr_server,
-                               &fromlen);
+            n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *) &udp_addr_server, &fromlen);
             if (n_bytes > 0) {
                 is_registered = true;
                 break;
@@ -296,7 +312,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
             break;
 
         if (tries < max_tries - 1) {
-            printd("Reiniciant procès subscripció");
+            printd("Reiniciem el procès de registre");
             sleep(u);
         }
     }
@@ -307,7 +323,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     }
 
     if (print_buffer && debug) {
-        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
+        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, 
                 data.mac, data.random, data.data);
         printd(buffer);
     }

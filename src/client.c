@@ -126,7 +126,6 @@ bool already_sent_alive = false; // Només printem en el cas que no s'hagi canvi
 struct parameters parameters;
 struct server_data server_data;
 struct client_config client_data;
-
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
 
 // DECLARACIÓ DE FUNCIONS
@@ -183,6 +182,9 @@ int main(int argc, char *argv[]) {
 
     print_client_info();
 
+    // Obrim un socket UDP
+    udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
+
     // Fem el binding del client
     memset(&addr_client, 0, sizeof(struct sockaddr_in));
     addr_client.sin_family = AF_INET;
@@ -199,9 +201,6 @@ int main(int argc, char *argv[]) {
     parameters.client_data = &client_data;
     parameters.addr_client = addr_client;
     parameters.udp_addr_server = udp_addr_server;
-
-    // Obrim un socket UDP
-    udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
     send_register_request(&client_data, addr_client, udp_addr_server);
     pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
@@ -258,24 +257,21 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     // Creem un paquet de registre
     setup_UDP_packet(client_data, &reg_pdu, REGISTER_REQ);
 
-    for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 &&
-                    strcmp("SEND_ALIVE", current_state) != 0; tries++) {
+    for (tries = 0; tries < max_tries && !is_state_equal("REGISTERED") && !is_state_equal("SEND_ALIVE"); tries++) {
         int packet_counter = 0;
         int t = T, p = P, q = Q, n = N, u = U;
 
-        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state) != 0) {
-            sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *) &udp_addr_server,
-                   sizeof(udp_addr_server));
+        while (packet_counter < n && !is_state_equal("SEND_ALIVE") && !is_state_equal("REGISTERED")) {
+            sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *) &udp_addr_server, sizeof(udp_addr_server));
             packet_counter++;
-            printd("Enviat paquet REGISTER_REQ");
+            printd("S'ha enviat paquet REGISTER_REQ");
 
-            if (strcmp(current_state, "DISCONNECTED") == 0) {
-                print_state(WAIT_REG_RESPONSE);
+            if (is_state_equal("DISCONNECTED")) {
+                print_state(WAIT_REG_RESPONSE); 
                 sleep(T);
             }
 
-            n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *) &udp_addr_server,
-                               &fromlen);
+            n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *) &udp_addr_server, &fromlen);
             if (n_bytes > 0) {
                 is_registered = true;
                 break;
@@ -296,7 +292,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
             break;
 
         if (tries < max_tries - 1) {
-            printd("Reiniciant procès subscripció");
+            printd("Reiniciem el procès de registre");
             sleep(u);
         }
     }
@@ -307,7 +303,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     }
 
     if (print_buffer && debug) {
-        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
+        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, 
                 data.mac, data.random, data.data);
         printd(buffer);
     }
