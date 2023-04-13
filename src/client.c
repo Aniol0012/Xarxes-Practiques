@@ -15,7 +15,6 @@
 #include <netdb.h>
 #include <pthread.h>
 
-
 // DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
 #define DISCONNECTED 0xA0 // Equip desconnectat
 #define WAIT_REG_RESPONSE 0xA2 // Espera de resposta a la petició de registre
@@ -53,12 +52,16 @@
 #define GET_END 0x3A // Fi de l’obtenció de l’arxiu de configuració
 
 // TEMPORITZADORS (EN SEGONS)
-#define T 1 // Temps màxim de resposta
-#define P 2 // Número de paquets
-#define Q 3
-#define U 2
-#define N 6
-#define O 2   // Número màxim de intents de registre
+
+// FASE DE REGISTRE
+#define T 1 // Temps en segons entre els primers p paquets REGISTER_REQ
+#define P 2 // Número de paquets REGISTER_REQ abans d'incrementar l'interval entre paquets
+#define Q 3 // Factor que multiplica T per obtenir l'interval màxim entre paquets REGISTER_REQ
+#define U 2 // Temps en segons abans de reiniciar el procés de registre si no s'ha completat
+#define N 6 // Nombre màxim de paquets REGISTER_REQ per a cada intent de registre
+#define O 2 // Nombre màxim d'intents de registre abans de finalitzar el programa
+
+//  FASEDE DE COMUNICACIÓ PERIÒDICA
 #define R 2   // Envia ALIVE_INF cada R segons
 #define U_2 3 // Número máxim de paquets ALIVE_INF sense rebre ALIVE_ACK
 
@@ -151,9 +154,6 @@ void print_bar(); // Printa una barra horitzontal decorativa
 // Si no rep resposta en T segons, se fa un altre registre
 // S'ha de controlar el nombre de trys que se fa de registre
 // S'ha de controlar el temps entre alives acks i alives naks
-// Mirar si podem treure el clientconfig dels parametres de les funcions
-// Cambiar noms de variables com el client_data del client_config o random_num
-// Posar les descripcions de les variables a damunt de cada una
 // Treure comentaris de merda
 // Revisar ortografia de comentaris i prints
 
