@@ -62,9 +62,12 @@
 #define R 2   // Envia ALIVE_INF cada R segons
 #define U_2 3 // Número máxim de paquets ALIVE_INF sense rebre ALIVE_ACK
 
-// DEFINIM VARIABLES DE SORTIDA
-#define EXIT_SUCCESS 0
-#define EXIT_FAIL -1
+// DEFINIM CONSTANTS
+#define EXIT_SUCCESS 0 // Codi de sortida en cas d'exit
+#define EXIT_FAIL -1 // Codi de sortida en cas d'error
+#define MAX_STATUS_LENGTH 18 // strlen('WAIT_REG_RESPONSE') = 17 + '\0'
+#define MAX_FILENAME_LENGTH 12 // strlen('client2.cfg') = 11 + '\0'
+#define BUFFER_SIZE 250 // Mida del buffer
 
 // DADES DE L'ARXIU DE CONFIGURACIÓ DEL CLIENT
 struct client_config {
@@ -85,7 +88,7 @@ struct server_data {
 
 // PARAMETRES PER A TRACTAR ELS PAQUETS
 struct parameters {
-    struct client_config *config;
+    struct client_config *client_data;
     struct sockaddr_in addr_client;
     struct sockaddr_in udp_addr_server;
     struct sockaddr_in tcp_addr_server;
@@ -108,8 +111,6 @@ bool print_buffer = false; // Mostra la informació rebuda pel buffer | DEFAULT 
 bool show_exit_status = false; // Mostre en mode debug el codi de retorn del programa | DEFAULT = FALSE
 bool debug = false; // Estat inicial del mode debug (s'activa amb el paràmetre -d) | DEFAULT = FALSE
 
-#define MAX_STATUS_LENGTH 18 // strlen('WAIT_REG_RESPONSE') = 17 + '\0'
-#define MAX_FILENAME_LENGTH 12 // strlen('client2.cfg') = 11 + '\0'
 
 // DEFINIM VARIABLES GLOBALS
 int udp_socket;
@@ -121,14 +122,15 @@ bool already_sent_alive = false; // Només printem en el cas que no s'hagi canvi
 // DEFINIM ESTRUCTURES GLOBALS
 struct parameters parameters;
 struct server_data server_data;
-struct client_config config;
+struct client_config client_data;
+
 struct udp_PDU create_packet(char type[], char mac[], char random_num[], char data[]);
 
 // DECLARACIÓ DE FUNCIONS
-void read_client_config(struct client_config *config); // Llegeix la configuració del arxiu de configuració del client
-void send_register_request(struct client_config *config, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client); // Fa la petició de registre al servidor
+void read_client_config(struct client_config *client_data); // Llegeix la configuració del arxiu de configuració del client
+void send_register_request(struct client_config *client_data, struct sockaddr_in udp_addr_server, struct sockaddr_in addr_client); // Fa la petició de registre al servidor
 void process_UDP_packet(); // Fa el tractament del packet UDP
-void setup_UDP_packet(struct udp_PDU *pdu, struct client_config *config, unsigned char petition);
+void setup_UDP_packet(struct client_config *configuracio, struct udp_PDU *pdu, unsigned char request); // Preparem un paquet UDP
 void send_alives(); // Envia comunicació periòdica al servidor
 int open_socket(int protocol); // Obrim un socket en funció del protocol proporcionat
 void *wait_quit(void *arg); // Una funció en un altre thread que espera comandes com el quit
@@ -146,15 +148,17 @@ void print_n(); // Printa un \n
 void print_bar(); // Printa una barra horitzontal decorativa
 
 // TODO:
+// Si no rep resposta en T segons, se fa un altre registre
 // S'ha de controlar el nombre de trys que se fa de registre
 // S'ha de controlar el temps entre alives acks i alives naks
 // Mirar si podem treure el clientconfig dels parametres de les funcions
-// Cambiar noms de variables com el config del client_config o random_num
+// Cambiar noms de variables com el client_data del client_config o random_num
 // Posar les descripcions de les variables a damunt de cada una
 // Treure comentaris de merda
 // Revisar ortografia de comentaris i prints
 
-// CODI PRINCIPAL
+///////////////////////////////// CODI PRINCIPAL /////////////////////////////////
+
 int main(int argc, char *argv[]) {
     struct sockaddr_in udp_addr_server, addr_client;
 
@@ -176,46 +180,49 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    print_state(DISCONNECTED); // Partim de l'estat disconnected
+    print_state(DISCONNECTED); // Partim de l'estat inicial disconnected
 
-    read_client_config(&config);
-    strcpy(config.random, "000000");
-    config.random[6] = '\0';
+    read_client_config(&client_data);
+    strcpy(client_data.random, "000000");
+    client_data.random[6] = '\0';
 
     printd("S'ha llegit l'arxiu de configuració");
 
     print_client_info();
 
-    /* Adreça del bind del client */
+    // Fem el binding del client
     memset(&addr_client, 0, sizeof(struct sockaddr_in));
     addr_client.sin_family = AF_INET;
     addr_client.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr_client.sin_port = htons(config.UDP_port);
+    addr_client.sin_port = htons(client_data.UDP_port);
 
-    /* Adreça del servidor */
+    // Fem el binding del servidor
     memset(&udp_addr_server, 0, sizeof(udp_addr_server));
     udp_addr_server.sin_family = AF_INET;
-    udp_addr_server.sin_addr.s_addr = inet_addr(config.server);
-    udp_addr_server.sin_port = htons(config.UDP_port);
+    udp_addr_server.sin_addr.s_addr = inet_addr(client_data.server);
+    udp_addr_server.sin_port = htons(client_data.UDP_port);
 
-    /* Per a poder tractar els paquets més facilment més endavant */
-    parameters.config = &config;
+    // Guardem l'estructura
+    parameters.client_data = &client_data;
     parameters.addr_client = addr_client;
     parameters.udp_addr_server = udp_addr_server;
 
     // Obrim un socket UDP
     udp_socket = open_socket(IPPROTO_UDP); // Especifiquem que volem crear el socket en UDP
 
-    send_register_request(&config, addr_client, udp_addr_server);
+    send_register_request(&client_data, addr_client, udp_addr_server);
     pthread_join(wait_quit_thread, NULL); // Esperem que acabi el fil
-    return 1;
+    return EXIT_SUCCESS;
 }
 
+///////////////////////////////// FUNCIONS AUXILIARS /////////////////////////////////
 
-void read_client_config(struct client_config *config) {
+// Llegeix la configuració del arxiu de configuració del client
+void read_client_config(struct client_config *client_data) {
     FILE *file;
     char label[50];
     file = fopen(client_config_file, "r");
+
     if (file == NULL) {
         fprintf(stderr, "Ha sorgit un error a l'obrir l'arxiu");
         exit_program(EXIT_FAIL);
@@ -223,40 +230,40 @@ void read_client_config(struct client_config *config) {
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
-    strcpy(config->name, label);
+    strcpy(client_data->name, label);
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
-    strcpy(config->MAC, label);
+    strcpy(client_data->MAC, label);
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
 
     if (strcmp(label, "localhost") == 0) {
-        strcpy(config->server, "127.0.0.1");
+        strcpy(client_data->server, "127.0.0.1");
     } else {
-        strcpy(config->server, label);
+        strcpy(client_data->server, label);
     }
 
     fscanf(file, "%s", label);
     fscanf(file, "%s", label);
-    config->UDP_port = atoi(label);
+    client_data->UDP_port = atoi(label);
     fclose(file);
 }
 
-// Crec que se pot treure el struct client_clonfig *config dels parametres perque es una variable global
-void send_register_request(struct client_config *config, struct sockaddr_in udp_addr_server,
+// Fa la petició de registre al servidor
+void send_register_request(struct client_config *client_data, struct sockaddr_in udp_addr_server,
                            struct sockaddr_in addr_client) {
     int tries, max_tries = 2, n_bytes;
-    bool registered = false; /*variable per saber si s'ha aconseguit correctament el registre */
+    bool is_registered = false;
     struct udp_PDU data;
     struct udp_PDU reg_pdu;
     socklen_t fromlen;
-    char buff[300];
+    char buffer[BUFFER_SIZE];
     fromlen = sizeof(udp_addr_server);
 
     // Creem un paquet de registre
-    setup_UDP_packet(&reg_pdu, config, REGISTER_REQ);
+    setup_UDP_packet(client_data, &reg_pdu, REGISTER_REQ);
 
     for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 &&
                     strcmp("SEND_ALIVE", current_state); tries++) {
@@ -277,7 +284,7 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
             n_bytes = recvfrom(udp_socket, &data, sizeof(data), MSG_DONTWAIT, (struct sockaddr *) &udp_addr_server,
                                &fromlen);
             if (n_bytes > 0) {
-                registered = true;
+                is_registered = true;
                 break;
             }
 
@@ -292,35 +299,33 @@ void send_register_request(struct client_config *config, struct sockaddr_in udp_
             sleep(t);
         }
 
-        if (registered)
+        if (is_registered)
             break;
 
         if (tries < max_tries - 1) {
             printd("Reiniciant procès subscripció");
             sleep(u);
         }
-    } /* Fi while d'enviar paquets */
+    }
 
-    if (tries == max_tries && !registered) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
+    if (tries == max_tries && !is_registered) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
         println("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
         exit_program(EXIT_FAIL);
     }
 
-    if (show_client_info && debug) {
-        sprintf(buff, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
+    if (print_buffer && debug) {
+        sprintf(buffer, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
                 data.mac, data.random, data.data);
-        //print_client_info(data.type, data.name, data.mac, data.random, data.data);
-        if (print_buffer) {
-            printd(buff);
-        }
+        printd(buffer);
     }
     parameters.data = &data;
     process_UDP_packet();
 }
 
+// Fa el tractament del packet UDP
 void process_UDP_packet() {
-    char buffer[250]; // Buffer per emmagatzemar missatges temporals
-    bool isValid = false;
+    char buffer[BUFFER_SIZE]; // Buffer per emmagatzemar missatges temporals
+    bool is_ALIVE_ACK_Valid = false;
 
     switch (parameters.data->type) {
         case REGISTER_REJ: // El registre ha estat rebutjat
@@ -332,7 +337,7 @@ void process_UDP_packet() {
             if (NACK_counter < O) {
                 printd("Rebut REGISTER_NACK, reiniciant el procès de registre");
                 NACK_counter++;
-                send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
+                send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
                 break;
             }
             printd("S'ha superat el número màxim d'intents");
@@ -341,21 +346,22 @@ void process_UDP_packet() {
             printd("S'ha rebut un REGISTER_ACK");
             if (!is_state_equal("REGISTERED")) {
                 print_state(REGISTERED);
-                parameters.config->TCP_port = atoi(parameters.data->data);
-                strcpy(parameters.config->random, parameters.data->random);
+                parameters.client_data->TCP_port = atoi(parameters.data->data);
+                strcpy(parameters.client_data->random, parameters.data->random);
                 strcpy(server_data.random, parameters.data->random);
                 strcpy(server_data.name, parameters.data->name);
                 strcpy(server_data.MAC, parameters.data->mac);
                 send_alives();
             }
             break;
-        case ALIVE_ACK: // Comprova si les dades del paquet ALIVE_ACK són correctes
+        case ALIVE_ACK: // Confirmació de recepció d’informació d’alive
+            // Comprova si les dades del paquet ALIVE_ACK són correctes
             if (strcmp(parameters.data->random, server_data.random) == 0 &&
                 strcmp(parameters.data->name, server_data.name) == 0 &&
                 strcmp(parameters.data->mac, server_data.MAC) == 0) {
-                isValid = true;
+                is_ALIVE_ACK_Valid = true;
             }
-            if (!isValid) {
+            if (!is_ALIVE_ACK_Valid) {
                 printd("El ALIVE_ACK no és valid");
                 break;
             }
@@ -373,7 +379,7 @@ void process_UDP_packet() {
                 printd("S'ha rebut un ALIVE_REJ");
                 print_state(DISCONNECTED);
                 printd("Reinici del procés de registre");
-                send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
+                send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
             }
             break;
         default: // Tipus de paquet desconegut o no gestionat
@@ -381,28 +387,30 @@ void process_UDP_packet() {
     }
 }
 
-void setup_UDP_packet(struct udp_PDU *pdu, struct client_config *configuracio, unsigned char peticio) {
-    pdu->type = peticio;
+// Preparem un paquet UDP
+void setup_UDP_packet(struct client_config *configuracio, struct udp_PDU *pdu, unsigned char request) {
+    pdu->type = request;
     strcpy(pdu->name, configuracio->name);
     strcpy(pdu->mac, configuracio->MAC);
     strcpy(pdu->random, configuracio->random);
     memset(pdu->data, '\0', sizeof(char) * 49);
 
-    if (peticio == REGISTER_REQ) {
+    if (request == REGISTER_REQ) {
         pdu->data[49] = '\0';
     }
 }
 
+// Envia comunicació periòdica al servidor
 void send_alives() {
-    int r = 3, u = 0, temp, n_bytes;
-    char buffer[300];
+    int r = R, u = 0, temp, n_bytes;
+    char buffer[BUFFER_SIZE];
     socklen_t fromlen;
     struct udp_PDU alive_pdu;
     struct udp_PDU data;
-    setup_UDP_packet(&alive_pdu, parameters.config, ALIVE_INF);
+    setup_UDP_packet(parameters.client_data, &alive_pdu, ALIVE_INF);
     fromlen = sizeof(&parameters.udp_addr_server);
 
-    while (true && u != 3) {
+    while (true && u != U_2) {
         temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *) &parameters.udp_addr_server,
                       sizeof(parameters.udp_addr_server));
         if (temp == -1) {
@@ -419,7 +427,7 @@ void send_alives() {
             }
             memset(buffer, '\0', sizeof(buffer));
             process_UDP_packet();
-            if (is_state_equal("SEND_ALIVE") || u == 3) {
+            if (is_state_equal("SEND_ALIVE") || u == U_2) {
                 break;
             }
         } else {
@@ -431,7 +439,7 @@ void send_alives() {
         print_state(DISCONNECTED);
         printd("NO s'ha rebut resposta");
         printd("Passat a l'estat DISCONNECTED i reinici del procès de subscripció");
-        send_register_request(parameters.config, parameters.udp_addr_server, parameters.addr_client);
+        send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
     } else if (is_state_equal("SEND_ALIVE")) {
         printd("Creat procés per mantenir comunicació periodica amb el servidor");
     }
@@ -481,10 +489,10 @@ void print_client_info() {
     if (show_client_info && debug) {
         printd("La informació obtinguda de l'arxiu de configuració ha estat:");
         printf("\t\t\t┌───────────────────────────────────┐\n");
-        printf("\t\t\t│\tId equip: %s\t    │\n", config.name);
-        printf("\t\t\t│\tAdreça MAC: %s    │\n", config.MAC);
-        printf("\t\t\t│\tNMS-Id: %s\t    │\n", config.server);
-        printf("\t\t\t│\tNMS-UDP-Port: %d\t    │\n", config.UDP_port);
+        printf("\t\t\t│\tId equip: %s\t    │\n", client_data.name);
+        printf("\t\t\t│\tAdreça MAC: %s    │\n", client_data.MAC);
+        printf("\t\t\t│\tNMS-Id: %s\t    │\n", client_data.server);
+        printf("\t\t\t│\tNMS-UDP-Port: %d\t    │\n", client_data.UDP_port);
         printf("\t\t\t└───────────────────────────────────┘\n");
     }
 }
