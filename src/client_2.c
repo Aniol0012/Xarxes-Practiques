@@ -15,7 +15,6 @@
 #include <netdb.h>
 #include <pthread.h>
 
-
 // DEFINIM ELS POSSIBLES ESTATS DEL EQUIP
 #define DISCONNECTED 0xA0 // Equip desconnectat
 #define WAIT_REG_RESPONSE 0xA2 // Espera de resposta a la petició de registre
@@ -53,12 +52,16 @@
 #define GET_END 0x3A // Fi de l’obtenció de l’arxiu de configuració
 
 // TEMPORITZADORS (EN SEGONS)
-#define T 1 // Temps màxim de resposta
-#define P 2 // Número de paquets
-#define Q 3
-#define U 2
-#define N 6
-#define O 2   // Número màxim de intents de registre
+
+// FASE DE REGISTRE
+#define T 1 // Temps en segons entre els primers p paquets REGISTER_REQ
+#define P 2 // Número de paquets REGISTER_REQ abans d'incrementar l'interval entre paquets
+#define Q 3 // Factor que multiplica T per obtenir l'interval màxim entre paquets REGISTER_REQ
+#define U 2 // Temps en segons abans de reiniciar el procés de registre si no s'ha completat
+#define N 6 // Nombre màxim de paquets REGISTER_REQ per a cada intent de registre
+#define O 2 // Nombre màxim d'intents de registre abans de finalitzar el programa
+
+//  FASEDE DE COMUNICACIÓ PERIÒDICA
 #define R 2   // Envia ALIVE_INF cada R segons
 #define U_2 3 // Número máxim de paquets ALIVE_INF sense rebre ALIVE_ACK
 
@@ -146,16 +149,6 @@ void print_state(int current_state); // Printa i canvia els nous estats
 void exit_program(int EXIT_STATUS); // Surt del programa segons el codi d'acabament
 void print_n(); // Printa un \n
 void print_bar(); // Printa una barra horitzontal decorativa
-
-// TODO:
-// Si no rep resposta en T segons, se fa un altre registre
-// S'ha de controlar el nombre de trys que se fa de registre
-// S'ha de controlar el temps entre alives acks i alives naks
-// Mirar si podem treure el clientconfig dels parametres de les funcions
-// Cambiar noms de variables com el client_data del client_config o random_num
-// Posar les descripcions de les variables a damunt de cada una
-// Treure comentaris de merda
-// Revisar ortografia de comentaris i prints
 
 ///////////////////////////////// CODI PRINCIPAL /////////////////////////////////
 
@@ -266,11 +259,11 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     setup_UDP_packet(client_data, &reg_pdu, REGISTER_REQ);
 
     for (tries = 0; tries < max_tries && strcmp("REGISTERED", current_state) != 0 &&
-                    strcmp("SEND_ALIVE", current_state); tries++) {
-        int packet_counter = 0, interval = T, t = T;
-        int p = P, q = Q, n = N, u = U;
+                    strcmp("SEND_ALIVE", current_state) != 0; tries++) {
+        int packet_counter = 0;
+        int t = T, p = P, q = Q, n = N, u = U;
 
-        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state)) {
+        while (packet_counter < n && strcmp("REGISTERED", current_state) != 0 && strcmp("SEND_ALIVE", current_state) != 0) {
             sendto(udp_socket, &reg_pdu, sizeof(reg_pdu), 0, (struct sockaddr *) &udp_addr_server,
                    sizeof(udp_addr_server));
             packet_counter++;
@@ -289,9 +282,9 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
             }
 
             if (packet_counter <= p) {
-                t = interval;
-            } else if (packet_counter > p && t < (q * T)) {
-                t += interval;
+                t = T;
+            } else if (packet_counter > p && packet_counter <= (p + (q - 1))) {
+                t += T;
             } else {
                 t = q * T;
             }
@@ -308,13 +301,13 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
         }
     }
 
-    if (tries == max_tries && !is_registered) { /* Comprova si s'ha sortit del bucle per màxim d'intents */
+    if (tries == max_tries && !is_registered) { // Comprova si s'ha sortit del bucle per màxim d'intents
         println("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
         exit_program(EXIT_FAIL);
     }
 
     if (print_buffer && debug) {
-        sprintf(buffer, "Rebut: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
+        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type,
                 data.mac, data.random, data.data);
         printd(buffer);
     }
@@ -335,7 +328,7 @@ void process_UDP_packet() {
             exit_program(EXIT_FAIL);
         case REGISTER_NACK: // El registre no s'ha realitzat correctament
             if (NACK_counter < O) {
-                printd("Rebut REGISTER_NACK, reiniciant el procès de registre");
+                printd("S'ha rebut REGISTER_NACK, reiniciant el procès de registre");
                 NACK_counter++;
                 send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
                 break;
@@ -442,6 +435,7 @@ void send_alives() {
     }
 }
 
+// Obrim un socket en funció del protocol proporcionat
 int open_socket(int protocol) {
 
     int socket_type;
@@ -461,6 +455,7 @@ int open_socket(int protocol) {
     return socket_created;
 }
 
+// Una funció en un altre thread que espera comandes com el quit
 void *wait_quit(void *arg) {
     char input[MAX_FILENAME_LENGTH];
     while (true) {
@@ -476,12 +471,14 @@ void *wait_quit(void *arg) {
     return NULL;
 }
 
+// Comparem el nou estat amb l'actual
 bool is_state_equal(char *str) {
     return strcmp(current_state, str) == 0;
 }
 
 ///////////////////////////////// FUNCIONS PER PRINTAR /////////////////////////////////
 
+// Printa la configuració llegida de l'arxiu de configuració del client
 void print_client_info() {
     if (show_client_info && debug) {
         printd("La informació obtinguda de l'arxiu de configuració ha estat:");
@@ -494,6 +491,7 @@ void print_client_info() {
     }
 }
 
+// Enregistra l'hora actual
 void get_time(char *time_str) {
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
@@ -501,6 +499,7 @@ void get_time(char *time_str) {
     sprintf(time_str, "%02d:%02d:%02d:", tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
+// Printar l'hora actual
 void print_time() {
     if (show_local_time) {
         char time_str[10];
@@ -509,11 +508,13 @@ void print_time() {
     }
 }
 
+// Printa un missatge en mode no debug
 void println(char *str) {
     print_time();
     printf("MSG.  =>  %s\n", str);
 }
 
+// Printa els debugs en cas que estigui activat
 void printd(char *str_given) {
     if (debug) {
         print_time();
@@ -521,6 +522,7 @@ void printd(char *str_given) {
     }
 }
 
+// Printa i canvia els nous estats
 void print_state(int current_state) {
     char current_state_str[MAX_STATUS_LENGTH];
 
@@ -551,6 +553,7 @@ void print_state(int current_state) {
     printf("MSG.  =>  Equip passa a l'estat: %s\n", current_state_str);
 }
 
+// Surt del programa segons el codi d'acabament
 void exit_program(int EXIT_STATUS) {
     printd("El programa s'ha aturat");
     if (show_exit_status) {
@@ -560,10 +563,12 @@ void exit_program(int EXIT_STATUS) {
     exit(EXIT_STATUS);
 }
 
+// Printa un \n
 void print_n() {
     printf("\n");
 }
 
+// Printa una barra horitzontal decorativa
 void print_bar() {
     printf("───────────────────────────────────────────────────────────────────────────\n");
 }
