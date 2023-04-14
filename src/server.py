@@ -65,6 +65,19 @@ def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
+def correct_paquet(data, equip, addr):
+    type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
+    id = id.decode().rstrip("\0")
+    mac = mac.decode().rstrip("\0")
+    random = random.decode().rstrip("\0")
+    if equip.mac != mac or equip.name != id:
+        return False
+    if equip.state == "REGISTERED" and equip.addr != addr:
+        return False
+    if equip.random_number != random and random != "0000000":
+        return False
+    return True
+
 def handle_udp(authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind(("127.0.0.1", 2023)) # S'ha dobtenir de l'arxiu
@@ -73,15 +86,20 @@ def handle_udp(authorized_clients):
         message, (ip, port) = sock_udp.recvfrom(1024)
         type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
         id = id.decode().rstrip("\0")
-        printt(id)
         mac = mac.decode().rstrip("\0")
         random = random.decode().rstrip("\0")
 
-        if type == REGISTER_REQ: # i primer random 0000000 id mac valid:
-            pack = ack_pack(generate_random_number(), 2024)
-            # sendto
-            # Mirar les comprovacions necessaries i segons si les cumpleix o no enviar ack
+        if mac in authorized_clients:
+            equip = authorized_clients[mac]
+            if type == REGISTER_REQ:
+                if correct_paquet(message, equip, (ip, port)):
+                    printt("L'equip està registrat")
+                    # Enviar un paquet de registre
+                else:
+                    printt("L'equip no està registrat")
 
+                # Realizar las acciones necesarias, como enviar el paquete de registro ACK
+            # Agregar otras acciones para los demás tipos de paquetes
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port):
@@ -180,7 +198,6 @@ def print_debug_activated():
 def print_bar(length=75):
     print("─" * length)
 
-
 def main():
     try:
         tractar_parametres()
@@ -197,7 +214,8 @@ def main():
         comandes(authorized_clients)
         
     except(KeyboardInterrupt, SystemExit):
-        printd("\nEl programa s'ha aturat")
+        print()
+        printd("El programa s'ha aturat")
         exit(1)
 
 if __name__ == "__main__":
