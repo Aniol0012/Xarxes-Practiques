@@ -25,6 +25,7 @@ ALIVE_REJ = 0x16
 
 server_id = None
 server_mac = None
+debug = False
 
 class ClientInfo:
     def __init__(self, name, mac, random_number=None, addr=None, state="DISCONNECTED"):
@@ -57,7 +58,7 @@ def generate_random_number():
 
 def handle_udp(authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_udp.bind(("127.0.0.1", 2023))
+    sock_udp.bind(("127.0.0.1", 2023)) # S'ha dobtenir de l'arxiu
 
     while True:
         message, (ip, port) = sock_udp.recvfrom(1024)
@@ -95,6 +96,10 @@ def print_client_list():
 def println(str):
     print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
 
+def printd(str):
+    if (debug):
+        print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
+
 def comandes(): # list i quit
     command = input('')
 
@@ -106,12 +111,52 @@ def comandes(): # list i quit
     else:
         println("Comanda incorrecta")
 
+def print_usage():
+    print("Uso: server.py [-c client_file] [-d] [-f config_file]")
+    print("  -c client_file: especifica un archivo de clientes autorizados diferente al predeterminado (equips.dat)")
+    print("  -d: habilita el modo de depuración (debug)")
+    print("  -f config_file: especifica un archivo de configuración diferente al predeterminado (server.cfg)")
+
 def tractar_parametres():
-    pass
+    global debug
+    client_file = "equips.dat"
+    config_file = "server.cfg"
+
+    i = 1
+    while i < len(sys.argv):
+        if sys.argv[i] == "-c":
+            i += 1
+            if i < len(sys.argv):
+                client_file = sys.argv[i]
+            else:
+                print_usage()
+                sys.exit(1)
+        elif sys.argv[i] == "-d":
+            print_debug_activated()
+            debug = True
+        elif sys.argv[i] == "-f":
+            i += 1
+            if i < len(sys.argv):
+                config_file = sys.argv[i]
+                printd("L'arxiu de configuració de l'equip és: " + config_file)
+            else:
+                print_usage()
+                sys.exit(1)
+        else:
+            print_usage()
+            sys.exit(1)
+        i += 1
+
+    return client_file, config_file
+
+def print_debug_activated():
+    print("───────────────────────────────────────────────────────────────────────────")
+    print("\t\t\tMode debug activat")
+    print("───────────────────────────────────────────────────────────────────────────")
 
 def main():
     try:
-        tractar_parametres()
+        client_file, config_file = tractar_parametres()
         config = load_server_config()
         authorized_clients = load_authorized_clients()
 
@@ -122,7 +167,7 @@ def main():
         comandes()
         
     except(KeyboardInterrupt, SystemExit):
-        print("Sortim del servidor")
+        printd("El programa s'ha aturat")
         exit(1)
 
 if __name__ == "__main__":
