@@ -25,6 +25,9 @@ ALIVE_REJ = 0x16
 
 server_id = None
 server_mac = None
+client_file = "equips.dat"
+config_file = "server.cfg"
+
 debug = False
 
 class ClientInfo:
@@ -124,8 +127,8 @@ def print_usage():
 
 def tractar_parametres():
     global debug
-    client_file = "equips.dat"
-    config_file = "server.cfg"
+    global client_file
+    global config_file
 
     i = 1
     while i < len(sys.argv):
