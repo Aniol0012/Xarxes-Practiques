@@ -38,22 +38,28 @@ class ClientInfo:
         self.addr = addr
         self.state = state
 
+class Config:
+    def __init__(self, name, mac, UDP_port, TCP_port):
+        self.name = name
+        self.mac = mac
+        self.UDP_port = UDP_port
+        self.TCP_port = TCP_port
 
-def load_authorized_clients(file_name="equips.dat"):
+def load_authorized_clients():
     clients = {}
-    with open(file_name, "r") as f:
+    with open(client_file, "r") as f:
         for line in f:
             name, mac = line.strip().split(" ")
             clients[mac] = ClientInfo(name, mac)
     return clients
 
 def load_server_config():
-    config = {}
-    with open("server.cfg", "r") as f:
+    with open(config_file, "r") as f:
+        config_data = {}
         for line in f:
-            key, value = line.strip().split()
-            config[key] = value
-    return config
+            key, value = line.strip().split(maxsplit=1)
+            config_data[key.lower()] = value
+    return Config(config_data["id"], config_data["mac"], config_data["udp-port"], config_data["tcp-port"])
 
 def generate_random_number():
     random_number = random.randint(100000, 999999)
@@ -72,7 +78,7 @@ def handle_udp(authorized_clients):
         random = random.decode().rstrip("\0")
 
         if type == REGISTER_REQ: # i primer random 0000000 id mac valid:
-            pack = ack_pack(generate_random_number, 2024)
+            pack = ack_pack(generate_random_number(), 2024)
             # sendto
             # Mirar les comprovacions necessaries i segons si les cumpleix o no enviar ack
 
@@ -95,8 +101,16 @@ def nack_alive_pack(motiu):
 def rej_alive_pack(motiu):
     pass
 
-def print_client_list():
-    pass
+# Modificar
+def print_client_list(authorized_clients):
+    print("Llistat dels clients autoritzats:")
+    print_bar()
+    print("{:<20} {:<20} {:<20} {:<20}".format("Nombre", "MAC", "Número Aleatorio", "Estado"))
+    print_bar()
+    
+    for client in authorized_clients.values():
+        print("{:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "N/A", client.state))
+
 
 def println(str):
     print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
@@ -108,22 +122,16 @@ def printd(str):
     if (debug):
         print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
 
-def comandes(): # list i quit
+def comandes(authorized_clients): # list i quit
     command = input('')
 
     if command == 'quit':
         sys.exit(0)
     elif command == 'list':
-        println("Estem a list")
-        # print_client_list()
+        print_client_list(authorized_clients)
     else:
         println("Comanda incorrecta")
 
-def print_usage():
-    print("Uso: server.py [-c client_file] [-d] [-f config_file]")
-    print("  -c client_file: especifica un archivo de clientes autorizados diferente al predeterminado (equips.dat)")
-    print("  -d: habilita el modo de depuración (debug)")
-    print("  -f config_file: especifica un archivo de configuración diferente al predeterminado (server.cfg)")
 
 def tractar_parametres():
     global debug
@@ -146,7 +154,6 @@ def tractar_parametres():
             i += 1
             if i < len(sys.argv):
                 config_file = sys.argv[i]
-                printd("L'arxiu de configuració de l'equip és: " + config_file)
             else:
                 print_usage()
                 sys.exit(1)
@@ -155,27 +162,42 @@ def tractar_parametres():
             sys.exit(1)
         i += 1
 
+    printd("L'arxiu de configuració del client és: " + client_file)
+    printd("L'arxiu de configuració de l'equip és: " + config_file)
     return client_file, config_file
 
+def print_usage():
+    print("Uso: server.py [-c client_file] [-d] [-f config_file]")
+    print("  -c client_file: especifica un archivo de clientes autorizados diferente al predeterminado (equips.dat)")
+    print("  -d: habilita el modo de depuración (debug)")
+    print("  -f config_file: especifica un archivo de configuración diferente al predeterminado (server.cfg)")
+
 def print_debug_activated():
-    print("───────────────────────────────────────────────────────────────────────────")
+    print_bar()
     print("\t\t\tMode debug activat")
-    print("───────────────────────────────────────────────────────────────────────────")
+    print_bar()
+
+def print_bar(length=75):
+    print("─" * length)
+
 
 def main():
     try:
-        client_file, config_file = tractar_parametres()
+        tractar_parametres()
         config = load_server_config()
+        global server_id, server_mac
+        server_id = config.name
+        server_mac = config.mac
         authorized_clients = load_authorized_clients()
 
         udp_thread = threading.Thread(target=handle_udp, args=(authorized_clients,)) # Ptsr passar una tupla buida
         udp_thread.daemon = True # Es tanca el fil automaticament
         udp_thread.start()
 
-        comandes()
+        comandes(authorized_clients)
         
     except(KeyboardInterrupt, SystemExit):
-        printd("El programa s'ha aturat")
+        printd("\nEl programa s'ha aturat")
         exit(1)
 
 if __name__ == "__main__":
