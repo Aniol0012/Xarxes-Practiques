@@ -64,17 +64,19 @@ def handle_udp(authorized_clients):
         message, (ip, port) = sock_udp.recvfrom(1024)
         type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
         id = id.decode().rstrip("\0")
+        printt(id)
         mac = mac.decode().rstrip("\0")
         random = random.decode().rstrip("\0")
 
         if type == REGISTER_REQ: # i primer random 0000000 id mac valid:
-            pack = ack_pack
+            pack = ack_pack(generate_random_number, 2024)
             # sendto
             # Mirar les comprovacions necessaries i segons si les cumpleix o no enviar ack
 
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port):
+    printt("Estem aqui")
     return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
 
 def nack_pack(motiu):
@@ -95,6 +97,9 @@ def print_client_list():
 
 def println(str):
     print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
+
+def printt(str):
+    print(time.strftime("%H:%H:%S") + ": TEST MSG.  =>  " + str)
 
 def printd(str):
     if (debug):
