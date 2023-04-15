@@ -327,7 +327,7 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     }
 
     if (print_buffer && debug) {
-        sprintf(buffer, "Dades rebudes: bytes: %lu, type: %i, mac: %s, aleatori: %s, dades: %s", sizeof(struct udp_PDU), data.type, 
+        sprintf(buffer, "Dades rebudes: \nbytes: %lu, type: %i, mac: %s, aleatori: %s, dades: %s", sizeof(struct udp_PDU), data.type, 
                 data.mac, data.random, data.data);
         printd(buffer);
     }

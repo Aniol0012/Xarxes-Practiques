@@ -77,6 +77,17 @@ def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
+
+def handle_udp(config, authorized_clients):
+    sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock_udp.bind((localhost_ip, int(config.UDP_port)))
+
+    while True:
+        message, addr = sock_udp.recvfrom(1024)
+        client_thread = threading.Thread(target=handle_client_udp, args=(sock_udp, config, authorized_clients, message, addr))
+        client_thread.daemon = True
+        client_thread.start()
+
 def correct_paquet(data, equip, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
     id = id.decode().rstrip("\0")
@@ -100,56 +111,44 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
         equip = authorized_clients[mac]
 
         if paq_type == REGISTER_REQ:
-            if equip.state != "REGISTERD" or equip.state != "SEND_ALIVE":
-                printt(equip.state)
-                equip.state = "WAIT_REG_RESPONSE"
-                printd("S'ha rebut una petició de registre")
-                if True: #correct_paquet(message, equip, (ip, port)):
-                    println("L'equip " + equip.name + " passa a estar registrat")
-                    equip.state = "REGISTERED"
-                    equip.addr = addr
-                    
-                    # Enviar un paquet de registre ACK
-                    ack_message = ack_pack(random, config.TCP_port)
-                    sock_udp.sendto(ack_message, addr)
+            equip.state = "WAIT_DB_CHECK"
+            print("El missatge és: " + str(message))
+            print("El equip és: " + str(equip))
+            print("La ip és: " + str(addr))
+            time.sleep(5)
 
-                else:
-                    printd("El paquet rebut per l'equip " + equip.name + " no és correcte")
+            if correct_paquet(message, equip, addr):
+                if equip.state != "REGISTERED":
+                    equip.random_number = generate_random_number()
+                equip.state = "REGISTERED"
+                equip.addr = addr
+
+                # Enviar un paquet de registre ACK
+                ack_message = ack_pack(equip.random_number, config.TCP_port, equip.name)
+                sock_udp.sendto(ack_message, addr)
             else:
-                printd("L'equip " + equip.name + " ja està registrat")
                 # Enviar un paquet de registre NACK
-                nack_message = nack_pack("L'equip ja està registrat")
+                nack_message = nack_pack("Dades incorrectes", equip.name)
                 sock_udp.sendto(nack_message, addr)
         else:
             printd("S'ha rebut un paquet desconegut: " + str(paq_type))
     else:
         # REGISTER_REJ el client no està autoritzat
-        rej_message = rej_pack("Client no autoritzat")
+        rej_message = rej_pack("Client no autoritzat", equip.name)
         sock_udp.sendto(rej_message, addr)
-
-def handle_udp(config, authorized_clients):
-    sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock_udp.bind((localhost_ip, int(config.UDP_port)))
-
-    while True:
-        message, addr = sock_udp.recvfrom(1024)
-        client_thread = threading.Thread(target=handle_client_udp, args=(sock_udp, config, authorized_clients, message, addr))
-        client_thread.daemon = True
-        client_thread.start()
-
 
 
 # PAQUETS FASE REGISTRE
-def ack_pack(random, tcp_port):
-    printt("Preparem un paquet REGISTER_ACK")
+def ack_pack(random, tcp_port, equip_name):
+    printt("Preparem un paquet REGISTER_ACK  per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
 
-def nack_pack(motiu):
-    printt("Preparem un paquet REGISTER_NACK")
+def nack_pack(motiu, equip_name):
+    printt("Preparem un paquet REGISTER_NACK per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
-def rej_pack(motiu):
-    printt("Preparem un paquet REGISTER_REJ")
+def rej_pack(motiu, equip_name):
+    printt("Preparem un paquet REGISTER_REJ per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
 
@@ -201,8 +200,8 @@ def print_client_list(authorized_clients):
     print_bar(95)
     
     for client in authorized_clients.values():
-        ip_addr = client.addr[0] if client.addr else "N/A"
-        print("{:<20} {:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "N/A", client.state, ip_addr))
+        ip_addr = client.addr[0] if client.addr else "-"
+        print("{:<20} {:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "-", client.state, ip_addr))
 
 
 def println(str):
