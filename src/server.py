@@ -121,18 +121,13 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
         equip = authorized_clients[mac]
         equip.addr = addr
 
-        #print("El tipus de paquet que s'ha rebut és: " + hex(paq_type))
-        printt(equip.state)
         if equip.first_packet_recieved:
-            equip.random_number = generate_random_number()
+            if equip.random_number == "0000000":
+                equip.random_number = generate_random_number()
         else:
             equip.random_number = "0000000"
             equip.first_packet_recieved = True
         val_correct_paquet = correct_paquet(message, equip, addr)
-
-        if val_correct_paquet != True:
-            print("El paquet no ha estat correcte")
-
 
         if paq_type == REGISTER_REQ:
             printd("S'ha rebut un REGISTER_REQ de " + equip.name)
@@ -183,6 +178,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
         # REGISTER_REJ el client no està autoritzat
         rej_message = rej_pack("Client no autoritzat", equip.name)
         sock_udp.sendto(rej_message, addr)
+
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port, equip_name):
