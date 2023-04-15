@@ -104,27 +104,46 @@ def handle_udp(config, authorized_clients):
             equip = authorized_clients[mac]
 
             if paq_type == REGISTER_REQ:
+                equip.state = "WAIT_REG_RESPONSE"
+                printt(equip.state)
                 printd("S'ha rebut una petició de registre")
-                if correct_paquet(message, equip, (ip, port)):
-                    printt("L'equip està registrat")
-                    # Enviar un paquet de registre
-                else:
-                    printt("L'equip no està registrat")
-            else:
-                print("S'ha rebut un paquet desconegut: " + paq_type)
+                if equip.state == "WAIT_REG_RESPONSE": # Treure el DISCONNECTED
+                    if True: #correct_paquet(message, equip, (ip, port)):
+                        println("L'equip " + equip.name + " passa a estar registrat")
+                        equip.state = "REGISTERED"
+                        
+                        # Enviar un paquet de registre ACK
+                        ack_message = ack_pack(random, config.TCP_port)
+                        sock_udp.sendto(ack_message, (ip, port))
 
-                # Realizar las acciones necesarias, como enviar el paquete de registro ACK
-            # Agregar otras acciones para los demás tipos de paquetes
+                    else:
+                        printd("El paquet rebut per l'equip " + equip.name + " no és correcte")
+                else:
+                    printd("L'equip " + equip.name + " ja està registrat")
+                    # Enviar un paquet de registre NACK
+                    nack_message = nack_pack("L'equip ja està registrat")
+                    sock_udp.sendto(nack_message, (ip, port))
+            else:
+                printd("S'ha rebut un paquet desconegut: " + str(paq_type))
+        else:
+            # REGISTER_REJ el client no està autoritzat
+            rej_message = rej_pack("Client no autoritzat")
+            sock_udp.sendto(rej_message, (ip, port))
+
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port):
-    printt("Preparem un paquet ACK")
+    printt("Preparem un paquet REGISTER_ACK")
     return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
 
 def nack_pack(motiu):
-    pass
+    printt("Preparem un paquet REGISTER_NACK")
+    return struct.pack("B7s13s7s50s", REGISTER_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+
 def rej_pack(motiu):
-    pass
+    printt("Preparem un paquet REGISTER_REJ")
+    return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+
 
 # PAQUETS FASE MANTENIMENT
 def ack_alive_pack(random):
