@@ -97,9 +97,10 @@ def correct_paquet(data, equip, addr):
         return False
     if equip.state == "REGISTERED" and equip.addr != addr:
         return False
-    if equip.random_number != random and random != "0000000":
+    if equip.random_number != random and random != "0000000" and equip.random_number is not None:
         return False
     return True
+
 
 def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
@@ -110,13 +111,9 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     if mac in authorized_clients:
         equip = authorized_clients[mac]
 
+        print(hex(paq_type))
         if paq_type == REGISTER_REQ:
             equip.state = "WAIT_DB_CHECK"
-            print("El missatge és: " + str(message))
-            print("El equip és: " + str(equip))
-            print("La ip és: " + str(addr))
-            time.sleep(5)
-
             if correct_paquet(message, equip, addr):
                 if equip.state != "REGISTERED":
                     equip.random_number = generate_random_number()
@@ -130,13 +127,17 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 # Enviar un paquet de registre NACK
                 nack_message = nack_pack("Dades incorrectes", equip.name)
                 sock_udp.sendto(nack_message, addr)
+        if paq_type == ALIVE_INF:
+            if (equip.state == "REGISTERED" or equip.state == "SEND_ALIVE"):
+                printd("S'ha rebut un ALIVE_INF")
+            else:
+                printd("El client encara no està registrat: " + equip.name)
         else:
-            printd("S'ha rebut un paquet desconegut: " + str(paq_type))
+            printd("S'ha rebut un paquet desconegut: " + hex(paq_type))
     else:
         # REGISTER_REJ el client no està autoritzat
         rej_message = rej_pack("Client no autoritzat", equip.name)
         sock_udp.sendto(rej_message, addr)
-
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port, equip_name):
