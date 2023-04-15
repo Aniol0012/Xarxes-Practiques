@@ -53,7 +53,7 @@ fi
 github_folder_name=Xarxes-Practica-1
 
 # Clonació dels arxius de configuració i el codi al github:
-cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client *.c client*.cfg equips.dat Makefile server server.cfg server.py server_backup.py $github_folder_name/src
+cp boot.cfg boot1.cfg boot2.cfg boot3.cfg client *.c client*.cfg equips.dat Makefile server server.cfg server.py $github_folder_name/src
 
 # Clonació d'arxius útils però no necessaris per a realitzar la pràctica:
 cp clonar.sh $github_folder_name/utils
