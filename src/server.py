@@ -31,7 +31,6 @@ server_mac = None
 config_file = "server.cfg" # -c
 equips_file = "equips.dat" # -u
 localhost_ip = "127.0.0.1"
-# Afegir el header del paquet aqui
 
 debug = False
 show_exit_status = False
@@ -82,15 +81,6 @@ def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
-def check_alive(authorized_clients):
-    while True:
-        time.sleep(CHECK_ALIVE_PERIOD)
-        for client in authorized_clients.values():
-            if client.state == "ALIVE":
-                if (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
-                    client.state = "DISCONNECTED"
-                    print_state(client.name, client.state)
-
 def handle_udp(config, authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind((localhost_ip, int(config.UDP_port)))
@@ -101,14 +91,19 @@ def handle_udp(config, authorized_clients):
         client_thread.daemon = True
         client_thread.start()
 
-        udp_thread = threading.Thread(target=wait_timeout, args=())
+        udp_thread = threading.Thread(target=wait_timeout, args=(authorized_clients))
         udp_thread.daemon = True # Es tanca el fil automaticament
         udp_thread.start()
 
 # Espera als j segons (4 per les proves de protocol) a que l'estat del client sigui ALIVE
-def wait_timeout():
+def wait_timeout(authorized_clients):
     while True:
-        pass
+        time.sleep(CHECK_ALIVE_PERIOD)
+        for client in authorized_clients.values():
+            if client.state == "ALIVE":
+                if (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
+                    client.state = "DISCONNECTED"
+                    print_state(client.name, client.state)
 
 def correct_paquet(data, equip, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
@@ -174,8 +169,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
                 sock_udp.sendto(nack_message, addr)
         elif paq_type == ALIVE_INF:
-            # Fer el control dels temps
-            printd("S'ha rebut un ALIVE_INF")
+            printd("S'ha rebut un ALIVE_INF de " + equip.name)
 
             if ((equip.state != "WAIT_DB_CHECK") or (equip.state != "WAIT_REG_RESPONSE") or (equip.state != "DISCONNECTED")):
                 if equip.state == "REGISTERED":
@@ -194,6 +188,8 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 printd("El client encara no està registrat: " + equip.name)
         else:
             printd("S'ha rebut un paquet desconegut: " + hex(paq_type))
+            err_message = err_pack("Error en el protocol", equip.name)
+            sock_udp.sendto(err_message, addr)
     else:
         # REGISTER_REJ el client no està autoritzat
         rej_message = rej_pack("Client no autoritzat", equip.name)
@@ -213,6 +209,10 @@ def rej_pack(motiu, equip_name):
     printd("Preparem un paquet REGISTER_REJ per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
+def err_pack(motiu, equip_name):
+    printd("Preparem un paquet ERROR per a " + equip_name)
+    return struct.pack("B7s13s7s50s", ERROR, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+
 
 # PAQUETS FASE MANTENIMENT
 def ack_alive_pack(random, equip_name):
@@ -227,7 +227,7 @@ def rej_alive_pack(motiu, equip_name):
     printd("Preparem un paquet ALIVE_REJ per a " + equip_name)
     return struct.pack("B7s13s7s50s", ALIVE_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
-
+# Tractem els diferents paràmetres passats en l'execució del programa
 def tractar_parametres():
     global debug
     global equips_file
@@ -260,7 +260,7 @@ def tractar_parametres():
     printd("L'arxiu de configuració de l'equip és: " + config_file)
     printd("L'arxiu dels equips autoritzats és: " + equips_file)
 
-
+# Es printa el llistat dels clients autoritzats i si estan registrats la seva adreça ip
 def print_client_list(authorized_clients):
     print("Llistat dels clients autoritzats:")
     print_bar(95)
@@ -275,16 +275,13 @@ def print_client_list(authorized_clients):
 def println(str):
     print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
 
-def printt(str):
-    print(time.strftime("%H:%H:%S") + ": TEST MSG.   =>  " + str)
-
 def printd(str, exit_status = None):
     if (debug and exit_status == None):
         print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
     elif (debug and exit_status != None):
         print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str + ": " + exit_status)
 
-def comandes(authorized_clients): # list i quit
+def comandes(authorized_clients):
     command = input('')
 
     if command == 'quit':
@@ -328,6 +325,7 @@ def main():
         server_mac = config.mac
         authorized_clients = load_authorized_clients()
 
+        # Fem un thread per a tractar els paquets udp
         udp_thread = threading.Thread(target=handle_udp, args=(config, authorized_clients))
         udp_thread.daemon = True # Es tanca el fil automaticament
         udp_thread.start()

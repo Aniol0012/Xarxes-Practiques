@@ -338,7 +338,6 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
 // Fa el tractament del packet UDP
 void process_UDP_packet() {
     char buffer[BUFFER_SIZE]; // Buffer per emmagatzemar missatges temporals
-    bool is_ALIVE_ACK_Valid = false;
 
     switch (parameters.data->type) {
         case REGISTER_REJ: // El registre ha estat rebutjat
@@ -376,7 +375,6 @@ void process_UDP_packet() {
             if (strcmp(parameters.data->random, server_data.random) == 0 &&
                 strcmp(parameters.data->name, server_data.name) == 0 &&
                 strcmp(parameters.data->mac, server_data.MAC) == 0) {
-                is_ALIVE_ACK_Valid = true;
             }
             // Si ja hem rebut un ALIVE_ACK només el printem en mode debug
             if (already_sent_alive) {
