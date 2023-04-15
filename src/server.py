@@ -90,46 +90,53 @@ def correct_paquet(data, equip, addr):
         return False
     return True
 
+def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
+    paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
+    id = id.decode().rstrip("\0")
+    mac = mac.decode().rstrip("\0")
+    random = random.decode().rstrip("\0")
+
+    if mac in authorized_clients:
+        equip = authorized_clients[mac]
+
+        if paq_type == REGISTER_REQ:
+            if equip.state != "REGISTERD" or equip.state != "SEND_ALIVE":
+                printt(equip.state)
+                equip.state = "WAIT_REG_RESPONSE"
+                printd("S'ha rebut una petició de registre")
+                if True: #correct_paquet(message, equip, (ip, port)):
+                    println("L'equip " + equip.name + " passa a estar registrat")
+                    equip.state = "REGISTERED"
+                    equip.addr = addr
+                    
+                    # Enviar un paquet de registre ACK
+                    ack_message = ack_pack(random, config.TCP_port)
+                    sock_udp.sendto(ack_message, addr)
+
+                else:
+                    printd("El paquet rebut per l'equip " + equip.name + " no és correcte")
+            else:
+                printd("L'equip " + equip.name + " ja està registrat")
+                # Enviar un paquet de registre NACK
+                nack_message = nack_pack("L'equip ja està registrat")
+                sock_udp.sendto(nack_message, addr)
+        else:
+            printd("S'ha rebut un paquet desconegut: " + str(paq_type))
+    else:
+        # REGISTER_REJ el client no està autoritzat
+        rej_message = rej_pack("Client no autoritzat")
+        sock_udp.sendto(rej_message, addr)
+
 def handle_udp(config, authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind((localhost_ip, int(config.UDP_port)))
 
     while True:
-        message, (ip, port) = sock_udp.recvfrom(1024)
-        paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
-        id = id.decode().rstrip("\0")
-        mac = mac.decode().rstrip("\0")
-        random = random.decode().rstrip("\0")
+        message, addr = sock_udp.recvfrom(1024)
+        client_thread = threading.Thread(target=handle_client_udp, args=(sock_udp, config, authorized_clients, message, addr))
+        client_thread.daemon = True
+        client_thread.start()
 
-        if mac in authorized_clients:
-            equip = authorized_clients[mac]
-
-            if paq_type == REGISTER_REQ:
-                if equip.state != "REGISTERD" or equip.state != "SEND_ALIVE":
-                    printt(equip.state)
-                    equip.state = "WAIT_REG_RESPONSE"
-                    printd("S'ha rebut una petició de registre")
-                    if True: #correct_paquet(message, equip, (ip, port)):
-                        println("L'equip " + equip.name + " passa a estar registrat")
-                        equip.state = "REGISTERED"
-                        
-                        # Enviar un paquet de registre ACK
-                        ack_message = ack_pack(random, config.TCP_port)
-                        sock_udp.sendto(ack_message, (ip, port))
-
-                    else:
-                        printd("El paquet rebut per l'equip " + equip.name + " no és correcte")
-                else:
-                    printd("L'equip " + equip.name + " ja està registrat")
-                    # Enviar un paquet de registre NACK
-                    nack_message = nack_pack("L'equip ja està registrat")
-                    sock_udp.sendto(nack_message, (ip, port))
-            else:
-                printd("S'ha rebut un paquet desconegut: " + str(paq_type))
-        else:
-            # REGISTER_REJ el client no està autoritzat
-            rej_message = rej_pack("Client no autoritzat")
-            sock_udp.sendto(rej_message, (ip, port))
 
 
 # PAQUETS FASE REGISTRE
@@ -189,12 +196,13 @@ def tractar_parametres():
 
 def print_client_list(authorized_clients):
     print("Llistat dels clients autoritzats:")
-    print_bar()
-    print("{:<20} {:<20} {:<20} {:<20}".format("Nom", "MAC", "Nombre Aleatori", "Estat"))
-    print_bar()
+    print_bar(95)
+    print("{:<20} {:<20} {:<20} {:<20} {:<20}".format("Nom", "MAC", "Nombre Aleatori", "Estat", "Adreça IP"))
+    print_bar(95)
     
     for client in authorized_clients.values():
-        print("{:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "N/A", client.state))
+        ip_addr = client.addr[0] if client.addr else "N/A"
+        print("{:<20} {:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "N/A", client.state, ip_addr))
 
 
 def println(str):
