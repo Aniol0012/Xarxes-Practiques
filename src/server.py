@@ -29,6 +29,7 @@ server_mac = None
 config_file = "server.cfg" # -c
 equips_file = "equips.dat" # -u
 localhost_ip = "127.0.0.1"
+# Afegir el header del paquet aqui
 
 debug = False
 show_exit_status = True
@@ -104,10 +105,10 @@ def handle_udp(config, authorized_clients):
             equip = authorized_clients[mac]
 
             if paq_type == REGISTER_REQ:
-                equip.state = "WAIT_REG_RESPONSE"
-                printt(equip.state)
-                printd("S'ha rebut una petició de registre")
-                if equip.state == "WAIT_REG_RESPONSE": # Treure el DISCONNECTED
+                if equip.state != "REGISTERD" or equip.state != "SEND_ALIVE":
+                    printt(equip.state)
+                    equip.state = "WAIT_REG_RESPONSE"
+                    printd("S'ha rebut una petició de registre")
                     if True: #correct_paquet(message, equip, (ip, port)):
                         println("L'equip " + equip.name + " passa a estar registrat")
                         equip.state = "REGISTERED"
