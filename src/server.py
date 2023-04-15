@@ -41,6 +41,8 @@ class ClientInfo:
         self.random_number = random_number
         self.addr = addr
         self.state = state
+        self.first_packet_recieved = False
+        self.alive_recieved = 0
 
 class Config:
     def __init__(self, name, mac, UDP_port, TCP_port):
@@ -95,11 +97,14 @@ def correct_paquet(data, equip, addr):
     random = random.decode().rstrip("\0")
     if equip.mac != mac or equip.name != id:
         return False
-    if equip.state == "REGISTERED" and equip.addr != addr:
+    if (equip.state == "REGISTERED" or equip.state == "ALIVE_INF") and equip.addr != addr:
         return False
     if equip.random_number != random and random != "0000000" and equip.random_number is not None:
         return False
     return True
+
+def print_state(equip_name, equip_state):
+    println("L'equip " + equip_name + " passa a l'estat " + equip_state)
 
 
 def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
@@ -111,13 +116,20 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     if mac in authorized_clients:
         equip = authorized_clients[mac]
 
-        print(hex(paq_type))
+        print("El tipus de paquet que s'ha rebut és: " + hex(paq_type))
+
         if paq_type == REGISTER_REQ:
+            printd("S'ha rebut un REGISTER_REQ")
             equip.state = "WAIT_DB_CHECK"
+            print_state(equip.name, equip.state)
             if correct_paquet(message, equip, addr):
                 if equip.state != "REGISTERED":
-                    equip.random_number = generate_random_number()
+                    if equip.first_packet_recieved:
+                        equip.random_number = generate_random_number()
+                    else:
+                        equip.random_number = "0000000"
                 equip.state = "REGISTERED"
+                print_state(equip.name, equip.state)
                 equip.addr = addr
 
                 # Enviar un paquet de registre ACK
@@ -125,11 +137,15 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 sock_udp.sendto(ack_message, addr)
             else:
                 # Enviar un paquet de registre NACK
+                equip.state = "WAIT_REG_RESPONSE"
+                print_state(equip.name, equip.state)
                 nack_message = nack_pack("Dades incorrectes", equip.name)
                 sock_udp.sendto(nack_message, addr)
-        if paq_type == ALIVE_INF:
+        elif paq_type == ALIVE_INF:
+            print("S'ha rebut un ALIVE_INF") # POSARO EN MODE DEBUG
             if (equip.state == "REGISTERED" or equip.state == "SEND_ALIVE"):
-                printd("S'ha rebut un ALIVE_INF")
+                equip.state == "SEND_ALIVE"
+                print_state(equip.name, equip.state)
             else:
                 printd("El client encara no està registrat: " + equip.name)
         else:
@@ -141,25 +157,31 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port, equip_name):
-    printt("Preparem un paquet REGISTER_ACK  per a " + equip_name)
+    printd("Preparem un paquet REGISTER_ACK  per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
 
 def nack_pack(motiu, equip_name):
-    printt("Preparem un paquet REGISTER_NACK per a " + equip_name)
+    printd("Preparem un paquet REGISTER_NACK per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
 def rej_pack(motiu, equip_name):
-    printt("Preparem un paquet REGISTER_REJ per a " + equip_name)
+    printd("Preparem un paquet REGISTER_REJ per a " + equip_name)
     return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
 
 
 # PAQUETS FASE MANTENIMENT
-def ack_alive_pack(random):
-    pass
-def nack_alive_pack(motiu):
-    pass
-def rej_alive_pack(motiu):
-    pass
+def ack_alive_pack(random, equip_name):
+    printd("Preparem un paquet ALIVE_ACK per a " + equip_name)
+    return struct.pack("B7s13s7s50s", ALIVE_ACK, server_id.encode(), server_mac.encode(), random.encode(), b'')
+
+def nack_alive_pack(motiu, equip_name):
+    printd("Preparem un paquet ALIVE_NACK per a " + equip_name)
+    return struct.pack("B7s13s7s50s", ALIVE_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+
+def rej_alive_pack(motiu, equip_name):
+    printd("Preparem un paquet ALIVE_REJ per a " + equip_name)
+    return struct.pack("B7s13s7s50s", ALIVE_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+
 
 def tractar_parametres():
     global debug
