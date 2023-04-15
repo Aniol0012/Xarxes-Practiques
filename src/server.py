@@ -23,6 +23,8 @@ ALIVE_ACK = 0x12
 ALIVE_NACK = 0x14
 ALIVE_REJ = 0x16
 
+CHECK_ALIVE_PERIOD = 2  # Periode en segons per verificar si els clients estan vius
+
 server_id = None
 server_mac = None
 
@@ -43,6 +45,7 @@ class ClientInfo:
         self.state = state
         self.first_packet_recieved = False
         self.alive_recieved = 0
+        self.last_alive_time = None
 
 class Config:
     def __init__(self, name, mac, UDP_port, TCP_port):
@@ -79,6 +82,14 @@ def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
+def check_alive(authorized_clients):
+    while True:
+        time.sleep(CHECK_ALIVE_PERIOD)
+        for client in authorized_clients.values():
+            if client.state == "ALIVE":
+                if (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
+                    client.state = "DISCONNECTED"
+                    print_state(client.name, client.state)
 
 def handle_udp(config, authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -89,6 +100,15 @@ def handle_udp(config, authorized_clients):
         client_thread = threading.Thread(target=handle_client_udp, args=(sock_udp, config, authorized_clients, message, addr))
         client_thread.daemon = True
         client_thread.start()
+
+        udp_thread = threading.Thread(target=wait_timeout, args=())
+        udp_thread.daemon = True # Es tanca el fil automaticament
+        udp_thread.start()
+
+# Espera als j segons (4 per les proves de protocol) a que l'estat del client sigui ALIVE
+def wait_timeout():
+    while True:
+        pass
 
 def correct_paquet(data, equip, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
@@ -308,7 +328,7 @@ def main():
         server_mac = config.mac
         authorized_clients = load_authorized_clients()
 
-        udp_thread = threading.Thread(target=handle_udp, args=(config, authorized_clients)) # Ptsr passar una tupla buida
+        udp_thread = threading.Thread(target=handle_udp, args=(config, authorized_clients))
         udp_thread.daemon = True # Es tanca el fil automaticament
         udp_thread.start()
 

@@ -378,10 +378,6 @@ void process_UDP_packet() {
                 strcmp(parameters.data->mac, server_data.MAC) == 0) {
                 is_ALIVE_ACK_Valid = true;
             }
-            if (!is_ALIVE_ACK_Valid) {
-                printd("El ALIVE_ACK no és valid");
-                break;
-            }
             // Si ja hem rebut un ALIVE_ACK només el printem en mode debug
             if (already_sent_alive) {
                 printd("S'ha rebut un ALIVE_ACK");
