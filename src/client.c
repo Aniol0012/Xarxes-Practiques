@@ -118,6 +118,7 @@ bool debug = false; // Estat inicial del mode debug (s'activa amb el paràmetre 
 // DEFINIM VARIABLES GLOBALS
 int udp_socket;
 char client_config_file[MAX_FILENAME_LENGTH] = "client.cfg";
+char configuration_file[MAX_FILENAME_LENGTH] = "boot.cfg";
 char current_state[MAX_STATUS_LENGTH] = "DISCONNECTED";
 int NACK_counter = 0; // Número de REGISTER_NACK que s'han rebut
 bool already_sent_alive = false; // Només printem en el cas que no s'hagi canviat el current_state a SEND_ALIVE
@@ -169,8 +170,11 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
             i++;
             strcpy(client_config_file, argv[i]);
+        } else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            i++;
+            strcpy(configuration_file, argv[i]);
         } else {
-            fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>]\n", argv[0]);
+            fprintf(stderr, "Ús: %s [-d] [-c <config_file.cfg>] [-f <configuration_file.cfg>]\n", argv[0]);
             exit_program(EXIT_SUCCESS); // És una sortida controlada del programa
         }
     }

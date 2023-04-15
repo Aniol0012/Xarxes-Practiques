@@ -116,7 +116,7 @@ def handle_udp(config, authorized_clients):
 
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port):
-    printt("Estem aqui")
+    printt("Preparem un paquet ACK")
     return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
 
 def nack_pack(motiu):
