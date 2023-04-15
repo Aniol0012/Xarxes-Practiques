@@ -322,12 +322,12 @@ void send_register_request(struct client_config *client_data, struct sockaddr_in
     }
 
     if (tries == max_tries && !is_registered) { // Comprova si s'ha sortit del bucle per màxim d'intents
-        println("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
+        printd("Ha fallat el procès de registre. No s'ha pogut contactar amb el servidor.");
         exit_program(EXIT_FAIL);
     }
 
     if (print_buffer && debug) {
-        sprintf(buffer, "Dades rebudes: bytes= %lu, type:%i, mac=%s, random=%s, dades=%s", sizeof(struct udp_PDU), data.type, 
+        sprintf(buffer, "Dades rebudes: bytes: %lu, type: %i, mac: %s, aleatori: %s, dades: %s", sizeof(struct udp_PDU), data.type, 
                 data.mac, data.random, data.data);
         printd(buffer);
     }

@@ -110,6 +110,8 @@ def handle_udp(config, authorized_clients):
                     # Enviar un paquet de registre
                 else:
                     printt("L'equip no està registrat")
+            else:
+                print("S'ha rebut un paquet desconegut: " + paq_type)
 
                 # Realizar las acciones necesarias, como enviar el paquete de registro ACK
             # Agregar otras acciones para los demás tipos de paquetes
