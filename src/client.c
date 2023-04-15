@@ -356,7 +356,11 @@ void process_UDP_packet() {
             printd("S'ha superat el número màxim d'intents");
             exit_program(EXIT_FAIL);
         case REGISTER_ACK: // El registre s'ha realitzat correctament
-            printd("S'ha rebut un REGISTER_ACK");
+            if (is_state_equal("WAIT_REG_RESPONSE") || is_state_equal("DISCONNECTED")) {
+                printd("S'ha rebut un REGISTER_ACK");
+            } else {
+                printd("S'ha rebut un REGISTER_ACK però l'equip no està regisistrat");
+            }
             if (!is_state_equal("REGISTERED")) {
                 print_state(REGISTERED);
                 parameters.client_data->TCP_port = atoi(parameters.data->data);
@@ -423,7 +427,7 @@ void send_alives() {
     setup_UDP_packet(parameters.client_data, &alive_pdu, ALIVE_INF);
     fromlen = sizeof(&parameters.udp_addr_server);
 
-    while (true && u != U_2) {
+    while (u != U_2) {
         temp = sendto(udp_socket, &alive_pdu, sizeof(alive_pdu), 0, (struct sockaddr *) &parameters.udp_addr_server,
                       sizeof(parameters.udp_addr_server));
         if (temp == -1) {
@@ -448,7 +452,7 @@ void send_alives() {
         }
     }
 
-    if (is_state_equal("REGISTERED")) {
+    if (u == U_2) {
         printd("No s'ha rebut resposta del servidor, reiniciem el procés de registre");
         print_state(DISCONNECTED);
         send_register_request(parameters.client_data, parameters.udp_addr_server, parameters.addr_client);
