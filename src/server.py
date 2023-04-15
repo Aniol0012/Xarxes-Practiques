@@ -116,7 +116,8 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     if mac in authorized_clients:
         equip = authorized_clients[mac]
 
-        print("El tipus de paquet que s'ha rebut és: " + hex(paq_type))
+        #print("El tipus de paquet que s'ha rebut és: " + hex(paq_type))
+        printt(equip.state)
 
         if paq_type == REGISTER_REQ:
             printd("S'ha rebut un REGISTER_REQ")
@@ -128,6 +129,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                         equip.random_number = generate_random_number()
                     else:
                         equip.random_number = "0000000"
+                        equip.first_packet_recieved = True
                 equip.state = "REGISTERED"
                 print_state(equip.name, equip.state)
                 equip.addr = addr
@@ -137,15 +139,28 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 sock_udp.sendto(ack_message, addr)
             else:
                 # Enviar un paquet de registre NACK
+                printd("El paquet no és correcte")
                 equip.state = "WAIT_REG_RESPONSE"
                 print_state(equip.name, equip.state)
                 nack_message = nack_pack("Dades incorrectes", equip.name)
                 sock_udp.sendto(nack_message, addr)
         elif paq_type == ALIVE_INF:
-            print("S'ha rebut un ALIVE_INF") # POSARO EN MODE DEBUG
-            if (equip.state == "REGISTERED" or equip.state == "SEND_ALIVE"):
-                equip.state == "SEND_ALIVE"
-                print_state(equip.name, equip.state)
+            # Fer el control dels temps
+            printd("S'ha rebut un ALIVE_INF") # POSARO EN MODE DEBUG
+
+            if ((equip.state != "WAIT_DB_CHECK") or (equip.state != "WAIT_REG_RESPONSE") or (equip.state != "DISCONNECTED")):
+                if equip.state == "REGISTERED":
+                    equip.state = "ALIVE"
+                    print_state(equip.name, equip.state)
+                    
+                if correct_paquet(message, equip, addr):
+                    println("S'ha enviat un ALIVE_ACK")
+                    ack_alive_message = ack_alive_pack(generate_random_number(), equip.name)
+                    sock_udp.sendto(ack_alive_message, addr)
+                else:
+                    printd("El paquet no és correcte")
+                    nack_alive_message = nack_alive_pack("Dades incorrectes", equip.name)
+                    sock_udp.sendto(nack_alive_message, addr)
             else:
                 printd("El client encara no està registrat: " + equip.name)
         else:
