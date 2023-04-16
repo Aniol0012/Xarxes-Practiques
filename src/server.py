@@ -23,8 +23,8 @@ ALIVE_ACK = 0x12
 ALIVE_NACK = 0x14
 ALIVE_REJ = 0x16
 
-CHECK_ALIVE_PERIOD = 2  # Periode en segons per verificar si els clients estan vius
-MAX_MISSED_ALIVES = 3
+CHECK_ALIVE_PERIOD = 2  # Període en segons per verificar si els clients estan vius
+MAX_MISSED_ALIVES = 3 # Nombre máxim de ALIVE_INF's que es poden perdre
 
 server_id = None
 server_mac = None
@@ -36,6 +36,7 @@ localhost_ip = "127.0.0.1"
 debug = False
 show_exit_status = False
 
+# La classe ClientInfo representa la informació d'un client autoritzat.
 class ClientInfo:
     def __init__(self, name, mac, random_number=None, addr=None, state="DISCONNECTED"):
         self.name = name
@@ -47,6 +48,7 @@ class ClientInfo:
         self.alive_recieved = 0
         self.last_alive_time = None
 
+# La classe Config representa la configuració del servidor.
 class Config:
     def __init__(self, name, mac, UDP_port, TCP_port):
         self.name = name
@@ -54,7 +56,9 @@ class Config:
         self.UDP_port = UDP_port
         self.TCP_port = TCP_port
 
-def load_authorized_clients(): # -u
+# Aquesta funció carrega els clients autoritzats a partir d'un fitxer de text (-u) 
+# i retorna un diccionari amb aquesta informació.
+def load_authorized_clients():
     try:
         clients = {}
         with open(equips_file, "r") as f:
@@ -66,7 +70,9 @@ def load_authorized_clients(): # -u
         printd("No s'ha pogut trobar l'arxiu de configuració '{}'".format(equips_file))
         exit_program(1)
 
-def load_server_config(): # -c
+# Aquesta funció carrega la configuració del servidor a partir d'un fitxer de text (-c) 
+# i retorna una instància de la classe Config.
+def load_server_config():
     try:
         with open(config_file, "r") as f:
             config_data = {}
@@ -78,6 +84,7 @@ def load_server_config(): # -c
         printd("No s'ha pogut trobar l'arxiu de configuració '{}'".format(config_file))
         exit_program(1)
 
+# Aquesta funció genera un nombre aleatori de 6 dígits i el retorna com a string.
 def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
@@ -114,9 +121,6 @@ def correct_paquet(data, equip, addr):
         if equip.random_number != "0000000" and equip.random_number is not None:
             return False
     return True
-
-def print_state(equip_name, equip_state):
-    println("L'equip " + equip_name + " passa a l'estat " + equip_state)
 
 # Aquesta funció comprova periòdicament si un client ha superat el temps d'espera 
 # de paquets ALIVE i canvia l'estat del client a "DISCONNECTED" en cas afirmatiu.
@@ -282,6 +286,31 @@ def tractar_parametres():
     printd("L'arxiu de configuració de l'equip és: " + config_file)
     printd("L'arxiu dels equips autoritzats és: " + equips_file)
 
+
+# Aquesta funció tracta les comandes introduïdes per l'usuari
+def comandes(authorized_clients):
+    command = input('')
+
+    if command == 'quit':
+        exit_program()
+    elif command == 'list':
+        print_client_list(authorized_clients)
+    else:
+        println("Comanda incorrecta")
+
+# Funcions per a printar
+def println(str):
+    print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
+
+def printd(str, exit_status = None):
+    if (debug and exit_status == None):
+        print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
+    elif (debug and exit_status != None):
+        print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str + ": " + exit_status)
+
+def print_state(equip_name, equip_state):
+    println("L'equip " + equip_name + " passa a l'estat " + equip_state)
+
 # Es printa el llistat dels clients autoritzats i si estan registrats la seva adreça ip
 def print_client_list(authorized_clients):
     print("Llistat dels clients autoritzats:")
@@ -292,26 +321,6 @@ def print_client_list(authorized_clients):
     for client in authorized_clients.values():
         ip_addr = client.addr[0] if client.addr else "-"
         print("{:<20} {:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "-", client.state, ip_addr))
-
-
-def println(str):
-    print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
-
-def printd(str, exit_status = None):
-    if (debug and exit_status == None):
-        print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
-    elif (debug and exit_status != None):
-        print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str + ": " + exit_status)
-
-def comandes(authorized_clients):
-    command = input('')
-
-    if command == 'quit':
-        exit_program()
-    elif command == 'list':
-        print_client_list(authorized_clients)
-    else:
-        println("Comanda incorrecta")
 
 def print_usage():
     println("Uso: server.py [-c config_file] [-d] [-u equips_file]")
