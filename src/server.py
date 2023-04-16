@@ -186,6 +186,8 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                     nack_message = nack_pack("La ip o el nombre aleatori no són correctes", equip.name)
                     sock_udp.sendto(nack_message, addr)
             else:
+                equip.state = "WAIT_REG_RESPONSE"
+                print_state(equip.name, equip.state)
                 nack_message_2 = nack_pack("L'equip ja està registrat", equip.name)
                 sock_udp.sendto(nack_message_2, addr)
                 printd("L'equip " + equip.name + " ja està registrat")
