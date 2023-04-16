@@ -10,11 +10,6 @@
         
      - ```./clonar.sh <-p <Comentari del commit>>```
     
-     - ```./clonar.sh <-r <Versió a modificar>>```
-    
      - ```./clonar.sh <--help>```
-
-- **version.txt**: Arxiu de control de versions, modificable amb la comanda:
-        ```./clonar.sh -r <num_control>```
     
 - **executer_instructions.txt**: Arxiu tutorial per a automatitzar el procés de compilació i execució del client.
