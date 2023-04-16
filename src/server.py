@@ -24,6 +24,7 @@ ALIVE_NACK = 0x14
 ALIVE_REJ = 0x16
 
 CHECK_ALIVE_PERIOD = 2  # Periode en segons per verificar si els clients estan vius
+MAX_MISSED_ALIVES = 3
 
 server_id = None
 server_mac = None
@@ -91,19 +92,9 @@ def handle_udp(config, authorized_clients):
         client_thread.daemon = True
         client_thread.start()
 
-        udp_thread = threading.Thread(target=wait_timeout, args=(authorized_clients))
+        udp_thread = threading.Thread(target=wait_timeout, args=(authorized_clients,))
         udp_thread.daemon = True # Es tanca el fil automaticament
         udp_thread.start()
-
-# Espera als j segons (4 per les proves de protocol) a que l'estat del client sigui ALIVE
-def wait_timeout(authorized_clients):
-    while True:
-        time.sleep(CHECK_ALIVE_PERIOD)
-        for client in authorized_clients.values():
-            if client.state == "ALIVE":
-                if (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
-                    client.state = "DISCONNECTED"
-                    print_state(client.name, client.state)
 
 def correct_paquet(data, equip, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
@@ -124,6 +115,23 @@ def correct_paquet(data, equip, addr):
 
 def print_state(equip_name, equip_state):
     println("L'equip " + equip_name + " passa a l'estat " + equip_state)
+
+# Tractaem els timeouts pels ALIVE del client
+def wait_timeout(authorized_clients):
+    while True:
+        time.sleep(CHECK_ALIVE_PERIOD)
+        for client in authorized_clients.values():
+            if client.state == "ALIVE":
+                if client.last_alive_time is not None and (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
+                    client.alive_recieved = 0
+                    client.state = "DISCONNECTED"
+                    print_state(client.name, client.state)
+                    printd("El client '{}' s'ha desconectat per no rebre ALIVEs consecutius".format(client.name))
+            elif client.state == "REGISTERED":
+                if client.last_alive_time is not None and (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * MAX_MISSED_ALIVES:
+                    client.state = "DISCONNECTED"
+                    print_state(client.name, client.state)
+                    printd("El client '{}' s'ha desconectat per no rebre el primer ALIVE abans del temps límit".format(client.name))
 
 
 def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
@@ -168,24 +176,29 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 print_state(equip.name, equip.state)
                 nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
                 sock_udp.sendto(nack_message, addr)
+
         elif paq_type == ALIVE_INF:
             printd("S'ha rebut un ALIVE_INF de " + equip.name)
 
             if ((equip.state != "WAIT_DB_CHECK") or (equip.state != "WAIT_REG_RESPONSE") or (equip.state != "DISCONNECTED")):
                 if equip.state == "REGISTERED":
                     equip.state = "ALIVE"
+                    equip.last_alive_time = time.time()
                     print_state(equip.name, equip.state)
-                    
+                elif equip.state == "ALIVE":
+                    equip.alive_recieved = 0
+                    equip.last_alive_time = time.time()
+
                 if correct_paquet(message, equip, addr):
                     ack_alive_message = ack_alive_pack(equip.random_number, equip.name)
                     sock_udp.sendto(ack_alive_message, addr)
-                    printd("S'ha enviat un ALIVE_ACK")
                 else:
                     printd("El paquet no és correcte")
                     nack_alive_message = nack_alive_pack("Dades incorrectes", equip.name)
                     sock_udp.sendto(nack_alive_message, addr)
             else:
                 printd("El client encara no està registrat: " + equip.name)
+
         else:
             printd("S'ha rebut un paquet desconegut: " + hex(paq_type))
             err_message = err_pack("Error en el protocol", equip.name)
