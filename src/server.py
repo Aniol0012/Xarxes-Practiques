@@ -82,6 +82,8 @@ def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
+# Aquesta funció s'encarrega de rebre paquets UDP i crea fils per a processar cada client 
+# i la lògica de temporitzador de desconnexió.
 def handle_udp(config, authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_udp.bind((localhost_ip, int(config.UDP_port)))
@@ -116,7 +118,8 @@ def correct_paquet(data, equip, addr):
 def print_state(equip_name, equip_state):
     println("L'equip " + equip_name + " passa a l'estat " + equip_state)
 
-# Tractaem els timeouts pels ALIVE del client
+# Aquesta funció comprova periòdicament si un client ha superat el temps d'espera 
+# de paquets ALIVE i canvia l'estat del client a "DISCONNECTED" en cas afirmatiu.
 def wait_timeout(authorized_clients):
     while True:
         time.sleep(CHECK_ALIVE_PERIOD)
@@ -133,7 +136,8 @@ def wait_timeout(authorized_clients):
                     print_state(client.name, client.state)
                     printd("El client '{}' s'ha desconectat per no rebre el primer ALIVE abans del temps límit".format(client.name))
 
-
+# Aquesta funció processa els paquets UDP rebuts dels clients, realitza la validació i la lògica 
+# de canvi d'estat, i envia paquets de resposta als clients segons correspongui.
 def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
     id = id.decode().rstrip("\0")
@@ -160,21 +164,21 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 equip.state = "REGISTERED"
                 print_state(equip.name, equip.state)
 
-                # Enviar un paquet de registre ACK
                 ack_message = ack_pack(equip.random_number, config.TCP_port, equip.name)
                 sock_udp.sendto(ack_message, addr)
             elif (val_correct_paquet == "wrong_mac_or_id"):
-                # Enviar un paquet de registre NACK
                 printd("La MAC o la id del equip no és correcte")
                 equip.state = "WAIT_REG_RESPONSE"
                 print_state(equip.name, equip.state)
+
                 nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
                 sock_udp.sendto(nack_message, addr)
             else:
-                printd("La mac o la id del equip no és correcte")
+                printd("La ip o el nombre aleatori no són correctes")
                 equip.state = "WAIT_REG_RESPONSE"
                 print_state(equip.name, equip.state)
-                nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
+
+                nack_message = nack_pack("La ip o el nombre aleatori no són correctes", equip.name)
                 sock_udp.sendto(nack_message, addr)
 
         elif paq_type == ALIVE_INF:
