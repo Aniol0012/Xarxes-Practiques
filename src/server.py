@@ -158,33 +158,38 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
 
         if paq_type == REGISTER_REQ:
             printd("S'ha rebut un REGISTER_REQ de " + equip.name)
-            equip.state = "WAIT_DB_CHECK"
-            print_state(equip.name, equip.state)
-            if val_correct_paquet:
-                equip.state = "REGISTERED"
+            if equip.state not in ["REGOSTERED", "ALIVE"]:
+                equip.state = "WAIT_DB_CHECK"
                 print_state(equip.name, equip.state)
+                if val_correct_paquet:
+                    equip.state = "REGISTERED"
+                    print_state(equip.name, equip.state)
 
-                ack_message = ack_pack(equip.random_number, config.TCP_port, equip.name)
-                sock_udp.sendto(ack_message, addr)
-            elif (val_correct_paquet == "wrong_mac_or_id"):
-                printd("La MAC o la id del equip no és correcte")
-                equip.state = "WAIT_REG_RESPONSE"
-                print_state(equip.name, equip.state)
+                    ack_message = ack_pack(equip.random_number, config.TCP_port, equip.name)
+                    sock_udp.sendto(ack_message, addr)
+                elif (val_correct_paquet == "wrong_mac_or_id"):
+                    printd("La MAC o la id del equip no és correcte")
+                    equip.state = "WAIT_REG_RESPONSE"
+                    print_state(equip.name, equip.state)
 
-                nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
-                sock_udp.sendto(nack_message, addr)
+                    nack_message = nack_pack("La mac o la id del equip no és correcte", equip.name)
+                    sock_udp.sendto(nack_message, addr)
+                else:
+                    printd("La ip o el nombre aleatori no són correctes")
+                    equip.state = "WAIT_REG_RESPONSE"
+                    print_state(equip.name, equip.state)
+
+                    nack_message = nack_pack("La ip o el nombre aleatori no són correctes", equip.name)
+                    sock_udp.sendto(nack_message, addr)
             else:
-                printd("La ip o el nombre aleatori no són correctes")
-                equip.state = "WAIT_REG_RESPONSE"
-                print_state(equip.name, equip.state)
-
-                nack_message = nack_pack("La ip o el nombre aleatori no són correctes", equip.name)
-                sock_udp.sendto(nack_message, addr)
+                nack_message_2 = nack_pack("L'equip ja està registrat", equip.name)
+                sock_udp.sendto(nack_message_2, addr)
+                printd("L'equip " + equip.name + " ja està registrat")
 
         elif paq_type == ALIVE_INF:
-            printd("S'ha rebut un ALIVE_INF de " + equip.name)
 
             if ((equip.state != "WAIT_DB_CHECK") or (equip.state != "WAIT_REG_RESPONSE") or (equip.state != "DISCONNECTED")):
+                printd("S'ha rebut un ALIVE_INF de " + equip.name)
                 if equip.state == "REGISTERED":
                     equip.state = "ALIVE"
                     equip.last_alive_time = time.time()
@@ -201,14 +206,14 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                     nack_alive_message = nack_alive_pack("Dades incorrectes", equip.name)
                     sock_udp.sendto(nack_alive_message, addr)
             else:
-                printd("El client encara no està registrat: " + equip.name)
+                printd("S'ha rebut un ALIVE_INF però el client encara no està registrat: " + equip.name)
 
         else:
             printd("S'ha rebut un paquet desconegut: " + hex(paq_type))
             err_message = err_pack("Error en el protocol", equip.name)
             sock_udp.sendto(err_message, addr)
     else:
-        # REGISTER_REJ el client no està autoritzat
+        printd("El client " + equip.name + " no està autoritzat, enviem un REGISTER_REJ" )
         rej_message = rej_pack("Client no autoritzat", equip.name)
         sock_udp.sendto(rej_message, addr)
 
