@@ -34,7 +34,7 @@ equips_file = "equips.dat" # -u
 localhost_ip = "127.0.0.1"
 
 debug = False
-show_exit_status = False
+show_exit_status = False # Mostra en mode debug el codi de retorn del programa
 
 # La classe ClientInfo representa la informació d'un client autoritzat.
 class ClientInfo:

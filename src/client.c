@@ -111,7 +111,7 @@ struct udp_PDU {
 bool show_local_time = true; // Mostra l'hora actual en els missatges | DEFAULT = TRUE
 bool show_client_info = true; // Mostra la informació rebuda per l'arxiu de configuració | DEFAULT = TRUE
 bool print_buffer = false; // Mostra la informació rebuda pel buffer | DEFAULT = FALSE
-bool show_exit_status = false; // Mostre en mode debug el codi de retorn del programa | DEFAULT = FALSE
+bool show_exit_status = false; // Mostra en mode debug el codi de retorn del programa | DEFAULT = FALSE
 bool debug = false; // Estat inicial del mode debug (s'activa amb el paràmetre -d) | DEFAULT = FALSE
 
 
