@@ -162,7 +162,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
 
         if paq_type == REGISTER_REQ:
             printd("S'ha rebut un REGISTER_REQ de " + equip.name)
-            if equip.state not in ["REGOSTERED", "ALIVE"]:
+            if equip.state not in ["REGISTERED", "ALIVE"]:
                 equip.state = "WAIT_DB_CHECK"
                 print_state(equip.name, equip.state)
                 if val_correct_paquet:
