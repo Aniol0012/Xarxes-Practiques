@@ -1,0 +1,5 @@
+Aqui se pujen els documents elaborats .drawio per a modificar-los en cas que faci falta.
+Els esquemes gràfics (.png) s'han de guardar a esquemes_digitalitzats
+
+Per guardar el document .drawio:
+	- Archivo => Hacer una copia => [Nom de l'arxiu] => Archivo XML (.drawio) => Descargar

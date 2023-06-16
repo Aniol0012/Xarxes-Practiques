@@ -1,0 +1,14 @@
+En aquestes instruccions se pot automatitzar el fet de compilar i executar el client en una sola comanda:
+
+1. Obrir la terminal
+
+2. Escriu la següent comanda per obrir el fitxer ".bashrc":
+    code ~/.bashrc
+
+3. Afegeix la següent línia al final del fitxer:
+    alias exec='make && ./client'
+
+4. Guarda el fitxer i escriu la següent comanda:
+    source ~/.bashrc
+
+5. A la mateixa terminal quan escriguis 'exec' se farà tot el procés de compilació i execució del client.

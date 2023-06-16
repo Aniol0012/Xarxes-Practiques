@@ -1,0 +1,11 @@
+Per a elaborar un esquema digital es fa mitjançant la web de: draw.io
+
+Per a les formes usem el següent menú: 
+
+[Cantonada inferior esquerra]: Más formas => Red => Allied Telesis, Cisco 19 i Citrix => Aplicar
+
+També podem usar la plantilla, però després guardar-la amb un altre nom, és a dir, no s'ha de modificar la plantilla directament.
+
+
+
+
