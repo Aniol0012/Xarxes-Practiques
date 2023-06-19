@@ -1,7 +1,7 @@
 # Xarxes-Practiques
 ## Xarxes - Febrer - Juny 2023
 
-2n de Enginyeria Informàtica UDL
+2n d'Enginyeria Informàtica UDL
 
 Autor: **Aniol Serrano Ortega**
 
