@@ -2,10 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import select
 import socket
-import os
-import datetime
 import struct
 import time
 import random
@@ -24,17 +21,18 @@ ALIVE_NACK = 0x14
 ALIVE_REJ = 0x16
 
 CHECK_ALIVE_PERIOD = 2  # Període en segons per verificar si els clients estan vius
-MAX_MISSED_ALIVES = 3 # Nombre máxim de ALIVE_INF's que es poden perdre
+MAX_MISSED_ALIVES = 3  # Nombre máxim de ALIVE_INF's que es poden perdre
 
 server_id = None
 server_mac = None
 
-config_file = "server.cfg" # -c
-equips_file = "equips.dat" # -u
+config_file = "server.cfg"  # -c
+equips_file = "equips.dat"  # -u
 localhost_ip = "127.0.0.1"
 
 debug = False
-show_exit_status = False # Mostra en mode debug el codi de retorn del programa
+show_exit_status = False  # Mostra en mode debug el codi de retorn del programa
+
 
 # La classe ClientInfo representa la informació d'un client autoritzat.
 class ClientInfo:
@@ -48,6 +46,7 @@ class ClientInfo:
         self.alive_recieved = 0
         self.last_alive_time = None
 
+
 # La classe Config representa la configuració del servidor.
 class Config:
     def __init__(self, name, mac, UDP_port, TCP_port):
@@ -56,7 +55,8 @@ class Config:
         self.UDP_port = UDP_port
         self.TCP_port = TCP_port
 
-# Aquesta funció carrega els clients autoritzats a partir d'un fitxer de text (-u) 
+
+# Aquesta funció carrega els clients autoritzats a partir d'un fitxer de text (-u)
 # i retorna un diccionari amb aquesta informació.
 def load_authorized_clients():
     try:
@@ -70,7 +70,8 @@ def load_authorized_clients():
         printd("No s'ha pogut trobar l'arxiu de configuració '{}'".format(equips_file))
         exit_program(1)
 
-# Aquesta funció carrega la configuració del servidor a partir d'un fitxer de text (-c) 
+
+# Aquesta funció carrega la configuració del servidor a partir d'un fitxer de text (-c)
 # i retorna una instància de la classe Config.
 def load_server_config():
     try:
@@ -84,12 +85,14 @@ def load_server_config():
         printd("No s'ha pogut trobar l'arxiu de configuració '{}'".format(config_file))
         exit_program(1)
 
+
 # Aquesta funció genera un nombre aleatori de 6 dígits i el retorna com a string.
 def generate_random_number():
     random_number = random.randint(100000, 999999)
     return str(random_number)
 
-# Aquesta funció s'encarrega de rebre paquets UDP i crea fils per a processar cada client 
+
+# Aquesta funció s'encarrega de rebre paquets UDP i crea fils per a processar cada client
 # i la lògica de temporitzador de desconnexió.
 def handle_udp(config, authorized_clients):
     sock_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -97,13 +100,15 @@ def handle_udp(config, authorized_clients):
 
     while True:
         message, addr = sock_udp.recvfrom(1024)
-        client_thread = threading.Thread(target=handle_client_udp, args=(sock_udp, config, authorized_clients, message, addr))
+        client_thread = threading.Thread(target=handle_client_udp,
+                                         args=(sock_udp, config, authorized_clients, message, addr))
         client_thread.daemon = True
         client_thread.start()
 
         udp_thread = threading.Thread(target=wait_timeout, args=(authorized_clients,))
-        udp_thread.daemon = True # Es tanca el fil automaticament
+        udp_thread.daemon = True  # Es tanca el fil automaticament
         udp_thread.start()
+
 
 def correct_paquet(data, equip, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", data)
@@ -113,34 +118,39 @@ def correct_paquet(data, equip, addr):
 
     if equip.mac != mac or equip.name != id:
         return "wrong_mac_or_id"
-    
+
     if equip.addr != addr:
         return False
-    
+
     if equip.first_packet_recieved == False:
         if equip.random_number != "0000000" and equip.random_number is not None:
             return False
     return True
 
-# Aquesta funció comprova periòdicament si un client ha superat el temps d'espera 
+
+# Aquesta funció comprova periòdicament si un client ha superat el temps d'espera
 # de paquets ALIVE i canvia l'estat del client a "DISCONNECTED" en cas afirmatiu.
 def wait_timeout(authorized_clients):
     while True:
         time.sleep(CHECK_ALIVE_PERIOD)
         for client in authorized_clients.values():
             if client.state == "ALIVE":
-                if client.last_alive_time is not None and (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
+                if client.last_alive_time is not None and (
+                        time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * 2:
                     client.alive_recieved = 0
                     client.state = "DISCONNECTED"
                     print_state(client.name, client.state)
                     printd("El client '{}' s'ha desconectat per no rebre ALIVEs consecutius".format(client.name))
             elif client.state == "REGISTERED":
-                if client.last_alive_time is not None and (time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * MAX_MISSED_ALIVES:
+                if client.last_alive_time is not None and (
+                        time.time() - client.last_alive_time) > CHECK_ALIVE_PERIOD * MAX_MISSED_ALIVES:
                     client.state = "DISCONNECTED"
                     print_state(client.name, client.state)
-                    printd("El client '{}' s'ha desconectat per no rebre el primer ALIVE abans del temps límit".format(client.name))
+                    printd("El client '{}' s'ha desconectat per no rebre el primer ALIVE abans del temps límit".format(
+                        client.name))
 
-# Aquesta funció processa els paquets UDP rebuts dels clients, realitza la validació i la lògica 
+
+# Aquesta funció processa els paquets UDP rebuts dels clients, realitza la validació i la lògica
 # de canvi d'estat, i envia paquets de resposta als clients segons correspongui.
 def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
     paq_type, id, mac, random, dades = struct.unpack("B7s13s7s50s", message)
@@ -193,8 +203,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
                 printd("L'equip " + equip.name + " ja està registrat")
 
         elif paq_type == ALIVE_INF:
-
-            if ((equip.state != "WAIT_DB_CHECK") or (equip.state != "WAIT_REG_RESPONSE") or (equip.state != "DISCONNECTED")):
+            if equip.state not in ["WAIT_DB_CHECK", "WAIT_REG_RESPONSE", "DISCONNECTED"]:
                 printd("S'ha rebut un ALIVE_INF de " + equip.name)
                 if equip.state == "REGISTERED":
                     equip.state = "ALIVE"
@@ -219,7 +228,7 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
             err_message = err_pack("Error en el protocol", equip.name)
             sock_udp.sendto(err_message, addr)
     else:
-        printd("El client " + equip.name + " no està autoritzat, enviem un REGISTER_REJ" )
+        printd("El client " + equip.name + " no està autoritzat, enviem un REGISTER_REJ")
         rej_message = rej_pack("Client no autoritzat", equip.name)
         sock_udp.sendto(rej_message, addr)
 
@@ -227,19 +236,26 @@ def handle_client_udp(sock_udp, config, authorized_clients, message, addr):
 # PAQUETS FASE REGISTRE
 def ack_pack(random, tcp_port, equip_name):
     printd("Preparem un paquet REGISTER_ACK  per a " + equip_name)
-    return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(), tcp_port.encode())
+    return struct.pack("B7s13s7s50s", REGISTER_ACK, server_id.encode(), server_mac.encode(), random.encode(),
+                       tcp_port.encode())
+
 
 def nack_pack(motiu, equip_name):
     printd("Preparem un paquet REGISTER_NACK per a " + equip_name)
-    return struct.pack("B7s13s7s50s", REGISTER_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+    return struct.pack("B7s13s7s50s", REGISTER_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(),
+                       motiu.encode())
+
 
 def rej_pack(motiu, equip_name):
     printd("Preparem un paquet REGISTER_REJ per a " + equip_name)
-    return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+    return struct.pack("B7s13s7s50s", REGISTER_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(),
+                       motiu.encode())
+
 
 def err_pack(motiu, equip_name):
     printd("Preparem un paquet ERROR per a " + equip_name)
-    return struct.pack("B7s13s7s50s", ERROR, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+    return struct.pack("B7s13s7s50s", ERROR, server_id.encode(), server_mac.encode(), "0000000".encode(),
+                       motiu.encode())
 
 
 # PAQUETS FASE MANTENIMENT
@@ -247,13 +263,18 @@ def ack_alive_pack(random, equip_name):
     printd("Preparem un paquet ALIVE_ACK per a " + equip_name)
     return struct.pack("B7s13s7s50s", ALIVE_ACK, server_id.encode(), server_mac.encode(), random.encode(), b'')
 
+
 def nack_alive_pack(motiu, equip_name):
     printd("Preparem un paquet ALIVE_NACK per a " + equip_name)
-    return struct.pack("B7s13s7s50s", ALIVE_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+    return struct.pack("B7s13s7s50s", ALIVE_NACK, server_id.encode(), server_mac.encode(), "0000000".encode(),
+                       motiu.encode())
+
 
 def rej_alive_pack(motiu, equip_name):
     printd("Preparem un paquet ALIVE_REJ per a " + equip_name)
-    return struct.pack("B7s13s7s50s", ALIVE_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(), motiu.encode())
+    return struct.pack("B7s13s7s50s", ALIVE_REJ, server_id.encode(), server_mac.encode(), "0000000".encode(),
+                       motiu.encode())
+
 
 # Tractem els diferents paràmetres passats en l'execució del programa
 def tractar_parametres():
@@ -263,14 +284,14 @@ def tractar_parametres():
 
     i = 1
     while i < len(sys.argv):
-        if sys.argv[i] == "-c": # server.cfg
+        if sys.argv[i] == "-c":  # server.cfg
             i += 1
             if i < len(sys.argv):
                 config_file = sys.argv[i]
             else:
                 print_usage()
                 exit_program()
-        elif sys.argv[i] == "-u": # equips.dat
+        elif sys.argv[i] == "-u":  # equips.dat
             i += 1
             if i < len(sys.argv):
                 equips_file = sys.argv[i]
@@ -300,45 +321,65 @@ def comandes(authorized_clients):
     else:
         println("Comanda incorrecta")
 
+
 # Funcions per a printar
 def println(str):
     print(time.strftime("%H:%H:%S") + ": MSG.  =>  " + str)
 
-def printd(str, exit_status = None):
+
+def printd(str, exit_status=None):
     if (debug and exit_status == None):
         print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str)
     elif (debug and exit_status != None):
         print(time.strftime("%H:%H:%S") + ": DEBUG MSG.  =>  " + str + ": " + exit_status)
 
+
 def print_state(equip_name, equip_state):
     println("L'equip " + equip_name + " passa a l'estat " + equip_state)
+
 
 # Es printa el llistat dels clients autoritzats i si estan registrats la seva adreça ip
 def print_client_list(authorized_clients):
     print("Llistat dels clients autoritzats:")
-    print_bar(95)
-    print("{:<20} {:<20} {:<20} {:<20} {:<20}".format("Nom", "MAC", "Nombre Aleatori", "Estat", "Adreça IP"))
-    print_bar(95)
-    
+    print("┌", end='')
+    print_bar(95, False)
+    print("┐")
+    print("│ {:<20} {:<20} {:<20} {:<20} {:<10}│".format("Nom", "MAC", "Nombre Aleatori", "Estat", "Adreça IP"))
+    print("├", end='')
+    print_bar(95, False)
+    print("┤")
+
     for client in authorized_clients.values():
         ip_addr = client.addr[0] if client.addr else "-"
-        print("{:<20} {:<20} {:<20} {:<20} {:<20}".format(client.name, client.mac, client.random_number or "-", client.state, ip_addr))
+        print("│ {:<20} {:<20} {:<20} {:<20} {:<10}│".format(client.name, client.mac, client.random_number or "-",
+                                                             client.state, ip_addr))
+
+    print("└", end='')
+    print_bar(95, False)
+    print("┘")
+
 
 def print_usage():
-    println("Uso: server.py [-c config_file] [-d] [-u equips_file]")
+    println("Ús: server.py [-c config_file] [-d] [-u equips_file]")
     println("  -c config_file: especifica un arxiu de configuració del servidor, default: server.cfg")
     println("  -d: habilita el mode de depuració (debug)")
     println("  -u equips_file: especifica un arxiu de clients autoritzats, default: equips.dat")
+
 
 def print_debug_activated():
     print_bar()
     print("\t\t\tMode debug activat")
     print_bar()
 
-def print_bar(length=75):
-    print("─" * length)
 
-def exit_program(exit_status = 0, print_line = False):
+def print_bar(length=75, new_line=True):
+    if (new_line):
+        print("─" * length)
+    else:
+        print("─" * length, end='')
+
+
+def exit_program(exit_status=0, print_line=False):
     # Es retorna amb 0 si ha estat una sortida controlada
     # Es retorna amb 1 o més si ha estat una sortida forçosa
     if print_line:
@@ -360,14 +401,15 @@ def main():
 
         # Fem un thread per a tractar els paquets udp
         udp_thread = threading.Thread(target=handle_udp, args=(config, authorized_clients))
-        udp_thread.daemon = True # Es tanca el fil automaticament
+        udp_thread.daemon = True  # Es tanca el fil automaticament
         udp_thread.start()
 
-        while True: # Fem un bucle infinit per a l'espera de més comandes
+        while True:  # Fem un bucle infinit per a l'espera de més comandes
             comandes(authorized_clients)
-        
+
     except(KeyboardInterrupt):
         exit_program(1, True)
+
 
 if __name__ == "__main__":
     main()
